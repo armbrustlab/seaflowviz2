@@ -14,13 +14,13 @@
 </template>
 
 <template name="charts">
-  <div class="range-title"><strong>Select a time range on the light intensity plot below</strong></div>
-  <div class="range" id='range'>
-      <a class='reset' href='javascript:charts["range"].filterAll();dc.redrawAll();' style='display: none;'>clear selection</a><br />
+  <div id="container">
+    <div class="range-title"><strong>Select a time range on the light intensity plot below</strong></div>
+    <div class="range" id='range'></div>
+    <div class="time" id="salinity"></div>
+    <div class="time" id="temp"></div>
+    <div class="time" id="velocity"></div>
+    <div class="pop" id="abundance"></div>
+    <div class="pop" id="fsc_small"></div>
   </div>
-  <div class="time" id="salinity"></div>
-  <div class="time" id="temp"></div>
-  <div class="time" id="velocity"></div>
-  <div class="pop" id="abundance"></div>
-  <div class="pop" id="fsc_small"></div>
 </template>
