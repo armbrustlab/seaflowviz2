@@ -24,7 +24,7 @@ uploader._write = function(chunk, err, next) {
       [chunk],
       function (err, result) {     // callback which returns the method call results 
         if (result) {
-          console.log(chunk.date + " " + chunk.pop + " added to db");
+          console.log(chunk.date.toISOString() + " " + chunk.pop + " added to db");
         }
         next();
       }
