@@ -17,8 +17,7 @@ function sflStream() {
   }
 
   options = {
-    writableObjectMode: false,
-    readableObjectMode: true
+    objectMode: true
   };
   Transform.call(this, options);
 
