@@ -97,9 +97,14 @@ body {
 	position: static;
 }
 
-.gmap {
-	width: 500px;
-	height: 480px;
+#cruise-map {
+  position: relative;
+  height: 480px;
+  width: 500px;
+  margin-top: 10px;
+  border-style: solid;
+  border-color: #ddd;
+  border-radius: 4px;
 }
 
 .range {

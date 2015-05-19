@@ -1,6 +1,12 @@
 Stat = new Mongo.Collection("stat")
 Sfl = new Mongo.Collection("sfl")
 
+Meteor.startup(function() {
+  Stat._ensureIndex({date: 1});
+  Sfl._ensureIndex({date: 1});
+  Sfl._ensureIndex({date: 1, pop: 1});
+});
+
 Meteor.publish("stat", function() {
   return Stat.find(
     {

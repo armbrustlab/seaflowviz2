@@ -33,6 +33,7 @@ Template.charts.rendered = function() {
       }
       updateRangeChart();
       updateCharts();
+      updateMap();
     }, 300, function(doc) {
       // If there is missing data (more than 3 minutes passed between points)
       // add an empty placeholder entry
@@ -51,6 +52,7 @@ Template.charts.rendered = function() {
       prevSfl = doc;
       xfs.sfl.add([doc]);
       xfs.range.add([doc]);
+      cruiseLocs.push({lat: doc.lat, lon: doc.lon, date: doc.date});
     })
   });
 
@@ -79,6 +81,16 @@ Template.charts.rendered = function() {
       xfs.pop.add([doc]);
     })
   });
+
+  var tileURL = 'http://localhost:4100/{z}/{x}/{y}.png';
+  var attribution = 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>';
+  cruiseMap = L.map('cruise-map').setView([47, -122], 4);
+  L.Icon.Default.imagePath = '/leaflet/images';
+  var tileLayer = L.tileLayer(tileURL, {
+    attribution: attribution,
+    maxZoom: 8
+  });
+  tileLayer.addTo(cruiseMap);
 };
 
 // Make sure func only runs if inner hasn't been called
@@ -119,6 +131,13 @@ var groups = {
 // dc.js charts
 var charts = {};
 dc.disableTransitions = true;
+
+/*
+Map stuff
+*/
+var cruiseLocs = [];
+var cruiseMap = null;
+var cruiseLayer = null;
 
 /*
 variables for chart formatting
@@ -430,8 +449,8 @@ function plotRangeChart(yAxisLabel) {
         dateRange = filter;  // set dateRange to filter window
       }
       updateCharts();
-      //updateShipTracks();
-    }, 600);
+      updateMap();
+    }, 400);
   });
   chart.margins().left = 60;
   chart.yAxis().ticks(4);
@@ -762,3 +781,59 @@ function filterPops() {
     });
   }
 }
+
+var updateMap = (function() {
+  var alreadyRun = false;
+
+  return function() {    
+    if (cruiseLocs.length === 0) {
+      return;
+    }
+    var allLatLngs = [];
+    var selectedLatLngs = [];
+    cruiseLocs.forEach(function(loc) {
+      if (! loc.latLng) {
+        loc.latLng = new L.latLng(loc.lat, loc.lon);
+      }
+      allLatLngs.push(loc.latLng);
+      if (dateRange && (loc.date >= dateRange[0] && loc.date <= dateRange[1])) {
+        selectedLatLngs.push(loc.latLng);
+      }
+    });
+    var latestLatLng = cruiseLocs[cruiseLocs.length-1].latLng;
+    var latestCircle = new L.CircleMarker(latestLatLng, {
+      color: "grey",
+      radius: 6,
+      weight: 2,
+      opacity: 0.75
+    });
+    var allCruiseLine = new L.polyline(allLatLngs, {
+      color: "#FFFF33",
+      weight: 3,
+      opacity: 0.5,
+      smoothFactor: 1
+    }); 
+    if (dateRange) {
+      var selectedCruiseLine = new L.polyline(selectedLatLngs, {
+        color: "red",
+        weight: 4,
+        opacity: 0.5,
+        smoothFactor: 1
+      });
+      var fg = L.featureGroup([allCruiseLine, selectedCruiseLine, latestCircle]);
+    } else {
+      var fg = L.featureGroup([allCruiseLine, latestCircle]);
+    }
+
+    if (cruiseLayer) {
+      cruiseMap.removeLayer(cruiseLayer);
+    }
+    cruiseMap.addLayer(fg);
+    cruiseLayer = fg;
+    if (! alreadyRun) {
+      // Only zoom to fit once
+      cruiseMap.fitBounds(fg.getBounds());
+      alreadyRun = true;
+    }
+  };
+})();

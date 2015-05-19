@@ -1,0 +1,14 @@
+{
+  "name": "seaflow-map",
+  "description": "Tile server for SeaFlow web viz app",
+  "version": "0.0.1",
+  "author": {
+    "name": "Chris Berthiaume",
+    "email": "chrisbee@uw.edu"
+  },
+  "private": true,
+  "dependencies": {
+    "express": "4.x",
+    "mbtiles": "0.x"
+  }
+}
