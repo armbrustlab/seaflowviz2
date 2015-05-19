@@ -1,14 +1,14 @@
 {
-    "name": "seaflow-push",
-    "description": "Push SeaFlow flow cytometer instrument data processed by popcycle to a Meteor Server",
-    "version": "0.0.1",
-    "author": {
-        "name": "Chris Berthiaume",
-        "email": "chrisbee@uw.edu"
-    },
-    "private": true,
-    "dependencies": {
-        "ddp-login": "1.0.x",
-	"split": "0.3.x"
-    }
+  "name": "seaflow-push",
+  "description": "Push SeaFlow flow cytometer instrument data processed by popcycle to a Meteor Server",
+  "version": "0.0.1",
+  "author": {
+    "name": "Chris Berthiaume",
+    "email": "chrisbee@uw.edu"
+  },
+  "private": true,
+  "dependencies": {
+    "ddp-login": "1.0.x",
+    "split": "0.3.x"
+  }
 }
