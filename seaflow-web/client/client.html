@@ -3,25 +3,37 @@
 </head>
 
 <body>
-  {{> loginButtons}}
-  {{> counts}}
+  <!--{{> loginButtons}}-->
+  <!--{{> counts}}-->
+  {{> loading}}
   {{> charts}}
 </body>
 
 <template name="counts">
-  <p>sfl count is {{sflCount}}</p>
-  <p>stat count is {{statCount}}</p>
+<p>sfl count is {{sflCount}}</p>
+<p>stat count is {{statCount}}</p>
+</template>
+
+<template name="loading">
+{{#if sflReady}}
+{{else}}
+  <p>Environmental data loading</p>
+{{/if}}
+{{#if statReady}}
+{{else}}
+  <p>Population data loading</p>
+{{/if}}
 </template>
 
 <template name="charts">
-  <div id="container">
-    <div class="range-title"><strong>Select a time range on the light intensity plot below</strong></div>
-    <div class="range" id='range'></div>
-    <div class="time" id="salinity"></div>
-    <div class="time" id="temp"></div>
-    <div class="time" id="velocity"></div>
-    <div class="pop" id="abundance"></div>
-    <div class="pop" id="fsc_small"></div>
-    <div id="cruise-map"></div>
-  </div>
+<div id="container">
+  <div class="range-title"><strong>Select a time range on the light intensity plot below</strong></div>
+  <div class="range" id='range'></div>
+  <div class="time" id="salinity"></div>
+  <div class="time" id="temp"></div>
+  <div class="time" id="velocity"></div>
+  <div class="pop" id="abundance"></div>
+  <div class="pop" id="fsc_small"></div>
+  <div id="cruise-map"></div>
+</div>
 </template>

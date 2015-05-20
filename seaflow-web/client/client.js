@@ -1,6 +1,18 @@
 Stat = new Mongo.Collection("stat")
 Sfl = new Mongo.Collection("sfl")
-Meteor.subscribe("sfl");
+var subHandles = {
+  sfl: Meteor.subscribe("sfl"),
+  stat: null
+};
+Session.set("sflReady", false);
+Session.set("statReady", false);
+
+Tracker.autorun(function(computation) {
+  if (subHandles.sfl.ready()) {
+    Session.set("sflReady", true);
+    computation.stop();
+  }
+});
 
 Template.counts.helpers({
   sflCount: function() {
@@ -10,6 +22,16 @@ Template.counts.helpers({
     return Stat.find().count();
   }
 });
+
+Template.loading.helpers({
+  sflReady: function() {
+    return Session.get("sflReady");
+  },
+  statReady: function() {
+    return Session.get("statReady");
+  }
+});
+
 
 /*
 Template functions
@@ -28,8 +50,14 @@ Template.charts.rendered = function() {
         initializeSflPlots();
         madeSflPlots = true;
 
-        // Subscrive to stat after SFL data has been received
-        Meteor.subscribe("stat");
+        // Subscribe to stat after SFL data has been received
+        subHandles.stat = Meteor.subscribe("stat");
+        Tracker.autorun(function(computation) {
+          if (subHandles.stat.ready()) {
+            Session.set("statReady", true);
+            computation.stop();
+          }
+        });
       }
       updateRangeChart();
       updateCharts();
