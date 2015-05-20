@@ -3,15 +3,23 @@
 </head>
 
 <body>
-  <!--{{> loginButtons}}-->
-  <!--{{> counts}}-->
-  {{> loading}}
-  {{> charts}}
+  <div class="container">
+    <div class="row">
+      <div class="col-xs-6">
+        <h1 class="page-header">SeaFlow realtime dashboard</h1>
+      </div>
+      <div class="col-xs-6">
+        {{> counts}}
+        {{> loading}}
+      </div>
+    </div>
+    {{> charts}}
+  </div>
 </body>
 
 <template name="counts">
-<p>sfl count is {{sflCount}}</p>
-<p>stat count is {{statCount}}</p>
+<p>environmental data count is {{sflCount}}</p>
+<p>population data count is {{statCount}}</p>
 </template>
 
 <template name="loading">
@@ -26,14 +34,43 @@
 </template>
 
 <template name="charts">
-<div id="container">
-  <div class="range-title"><strong>Select a time range on the light intensity plot below</strong></div>
-  <div class="range" id='range'></div>
-  <div class="time" id="salinity"></div>
-  <div class="time" id="temp"></div>
-  <div class="time" id="velocity"></div>
-  <div class="pop" id="abundance"></div>
-  <div class="pop" id="fsc_small"></div>
-  <div id="cruise-map"></div>
+<div class="row">
+  <div class="col-xs-12 range-title">
+    <strong>Select a time range on the light intensity plot below</strong>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-xs-12 range" id="range">
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-xs-6" id="cruise-map">
+  </div>
+  <div class="col-xs-6">
+    <div class="row">
+      <div class="col-xs-12 time" id="salinity">
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-xs-12 time" id="temp">
+      </div>
+    </div>
+    <!--<div class="row">
+      <div class="col-xs-12 time" id="velocity">
+      </div>
+    </div>-->
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-xs-12 pop top-pad" id="abundance">
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-xs-12 pop top-pad" id="fsc_small">
+  </div>
 </div>
 </template>

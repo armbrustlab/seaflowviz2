@@ -10,63 +10,6 @@ body {
 	font: 12px helvetica, sans-serif;
 }
 
-#topbar {
-	width: 100%;
-	height: 50px;
-	top: 0px;
-	margin: 0;
-	position: absolute;
-	text-align: center;
-	margin-top: 20px;
-	font: 24px helvetica, sans-serif, bold;
-	z-index: 1;
-}
-
-#topleft {
-	height: 50px;
-	top: 0px;
-	left: 0px;
-	margin-left: 5px;
-	margin-top: 5px;
-	position: absolute;
-	z-index: 2;
-}
-
-#topright {
-	height: 50px;
-	top: 0px;
-	right: 0px;
-	margin-right: 5px;
-	margin-top: 5px;
-	position: absolute;
-	z-index: 2;
-}
-
-#bottomleft {
-	height: 25px;
-	bottom: 0px;
-	left: 0px;
-	margin-left: 5px;
-	position: absolute;
-}
-
-#bottomright {
-	height: 25px;
-	bottom: 0px;
-	right: 0px;
-	margin-right: 5px;
-	position: absolute;
-}
-
-.infoBox {
-	font-size: 13px;
-	font-family: helvetica, bold;
-	margin: 5px;
-	padding: 5px;
-	background: white;
-	border-radius: 5px;
-}
-
 #container {
 	width: 1000px;
 	height: 500px;
@@ -76,53 +19,34 @@ body {
 	bottom: 0px;
 }
 
-.gridly: {
-	position: relative;
-	width: 1000px;
+.range {
+    height: 120px;
+    margin-bottom: 50px;
 }
 
-.square.small {
-	width: 200px;
-	height: 200px;
-}
-
-.square.large {
-	width: 500px;
-	height: 500px;
-}
-
-.time {
-	width:480px;
-	height:120px;
-	position: static;
+.range-title {
+    height: 10px;
+    text-align: center;
 }
 
 #cruise-map {
-  position: relative;
-  height: 480px;
-  width: 500px;
+  height: 240px;
   margin-top: 10px;
   border-style: solid;
   border-color: #ddd;
   border-radius: 4px;
 }
 
-.range {
-	width: 1000px;
-	height: 120px;
-	position: relative;
-	margin-bottom: 50px;
+.top-pad {
+    margin-top: 20px;
 }
 
-.range-title {
-	width: 1000px;
-	height: 10px;
-	text-align: center;
+.time {
+    height:120px;
 }
 
 .pop {
-	width: 1000px;
-	height: 300px;
+	height: 200px;
 }
 
 .text {
@@ -134,12 +58,6 @@ body {
 	width: 1000px;
 	height: 50px;
 	margin-top:10px;
-}
-
-.spacer {
-	width: 1000px;
-	height: 10px;
-	position: relative;
 }
 
 .dc-chart .grid-line line {

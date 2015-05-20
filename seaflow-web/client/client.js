@@ -435,8 +435,8 @@ function plotRangeChart(yAxisLabel) {
   var group = addEmpty(groups.range[binSize], binSize);
   var yAxisDomain = yDomains[key] ? yDomains[key] : d3.extent(group.all(), valueAccessor);
   chart
-    .width(1000)
-    .height(120)
+    .width($("#" + key).width())
+    .height($("#" + key).height())
     .x(d3.time.scale.utc().domain(minMaxTime))
     .y(d3.scale.linear().domain(yAxisDomain))
     .interpolate("cardinal")
@@ -498,8 +498,8 @@ function plotLineChart(key, yAxisLabel) {
   var yAxisDomain = yDomains[key] ? yDomains[key] : d3.extent(group.all(), valueAccessor);
 
   chart
-    .width(480)
-    .height(120)
+    .width($("#" + key).width())
+    .height($("#" + key).height())
     .x(d3.time.scale.utc().domain(minMaxTime))
     .y(d3.scale.linear().domain(yAxisDomain))
     .brushOn(false)
@@ -551,8 +551,8 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
   var legendHeight = 15;  // size of legend
 
   chart
-    .width(1000)
-    .height(300)
+    .width($("#" + key).width())
+    .height($("#" + key).height())
     .chart(dc.lineChart)
     .x(d3.time.scale.utc().domain(minMaxTime))
     .y(d3.scale.linear().domain(yAxisDomain))
@@ -592,7 +592,7 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
   if (legendFlag) {
     chart.margins().top = legendHeight + 5;
     chart.legend(dc.legend()
-      .x(600)
+      .x(200)
       .y(0)
       .itemHeight(legendHeight)
       .gap(10)

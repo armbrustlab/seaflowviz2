@@ -9,3 +9,5 @@ accounts-ui
 accounts-password
 d3js:d3
 meteorhacks:aggregate
+less
+twbs:bootstrap
