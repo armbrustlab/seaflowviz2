@@ -6,6 +6,7 @@ var subHandles = {
 };
 Session.set("sflReady", false);
 Session.set("statReady", false);
+Session.set("recent", null);
 
 Tracker.autorun(function(computation) {
   if (subHandles.sfl.ready()) {
@@ -14,28 +15,27 @@ Tracker.autorun(function(computation) {
   }
 });
 
-Template.counts.helpers({
+/*
+Template functions
+*/
+Template.status.helpers({
   sflCount: function() {
     return Sfl.find().count();
   },
   statCount: function() {
     return Stat.find().count();
-  }
-});
-
-Template.loading.helpers({
+  },
   sflReady: function() {
     return Session.get("sflReady");
   },
   statReady: function() {
     return Session.get("statReady");
+  },
+  recent: function() {
+    return Session.get("recent");
   }
 });
 
-
-/*
-Template functions
-*/
 Template.charts.rendered = function() {
   var madeSflPlots = false;
   var madePopPlots = false;
@@ -62,6 +62,7 @@ Template.charts.rendered = function() {
       updateRangeChart();
       updateCharts();
       updateMap();
+      Session.set("recent", doc.date.toISOString());
     }, 1000, function(doc) {
       // If there is missing data (more than 3 minutes passed between points)
       // add an empty placeholder entry
@@ -428,6 +429,11 @@ plotting functions
 */
 function initializeSflPlots() {
   plotRangeChart("PAR (w/m2)");
+  // Only do intialize range chart filter (brush selection) dateRange is not 
+  // the whole data set.
+  if (dateRange[0] !== dims.date[1].bottom(1)[0].date || dateRange[1] !== dims.date[1].top(1)[0].date) {
+    charts.range.filter(dateRange);
+  }
   //plotLineChart("velocity", "Speed (knots)");
   plotLineChart("temp", "Temp (degC)");
   plotLineChart("salinity", "Salinity (psu)");
@@ -499,7 +505,6 @@ function plotRangeChart(yAxisLabel) {
   chart.margins().left = 60;
   chart.yAxis().ticks(4);
   chart.yAxis().tickFormat(d3.format(".2f"));
-  chart.filter(dateRange);  // set default brush selection
   chart.render();
 }
 
@@ -643,7 +648,7 @@ function updateCharts() {
       charts[key].x().domain(dateRange);
       recalculateY(charts[key], yDomains[key]);
       // clear DOM nodes to prevent memory leaks before render
-      charts[key].resetSvg();
+      //charts[key].resetSvg();
       charts[key].render();
     }
   });
@@ -656,9 +661,7 @@ function updateCharts() {
       charts[key].x().domain(dateRange);
       recalculateY(charts[key], yDomains[key]);
       // clear DOM nodes to prevent memory leaks before render
-      var s = charts[key].svg();
-      charts[key].resetSvg();
-
+      //charts[key].resetSvg();
       charts[key].render();
       configureLegendButtons(charts[key]);
     }
@@ -672,7 +675,7 @@ function updateCharts() {
       charts[key].x().domain(dateRange);
       recalculateY(charts[key], yDomains[key]);
       // clear DOM nodes to prevent memory leaks before render
-      charts[key].resetSvg();
+      //charts[key].resetSvg();
       charts[key].render();
     }
   });
@@ -731,7 +734,7 @@ function updateRangeChart() {
       charts.range.brush().extent(filter);
     }
     // clear DOM nodes to prevent memory leaks before render
-    charts.range.resetSvg();
+    //charts.range.resetSvg();
     charts.range.render();
   }
 
@@ -803,13 +806,13 @@ function configureLegendButtons(chart) {
       // Recalculate Y domain, reset onclick
       if (charts.abundance) {
         recalculateY(charts.abundance);
-        charts.abundance.resetSvg();
+        //charts.abundance.resetSvg();
         charts.abundance.render();
         configureLegendButtons(charts.abundance);
       }
       if (charts.fsc_small) {
         recalculateY(charts.fsc_small);
-        charts.fsc_small.resetSvg();
+        //charts.fsc_small.resetSvg();
         charts.fsc_small.render();
         configureLegendButtons(charts.fsc_small);
       }

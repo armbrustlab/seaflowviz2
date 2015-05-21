@@ -10,28 +10,29 @@
         <h1 class="page-header">SeaFlow realtime dashboard</h1>
       </div>
       <div class="col-xs-6">
-        {{> counts}}
-        {{> loading}}
+        {{> status}}
       </div>
     </div>
     {{> charts}}
   </div>
 </body>
 
-<template name="counts">
-<p>environmental data count is {{sflCount}}</p>
-<p>population data count is {{statCount}}</p>
-</template>
-
-<template name="loading">
+<template name="status">
+<p>newest data point is <strong>{{recent}}</strong></p>
+<p>environmental data => <strong>{{sflCount}}</strong>
 {{#if sflReady}}
+... loaded
 {{else}}
-  <p>Environmental data loading</p>
+... loading
 {{/if}}
+</p>
+<p>population data => <strong>{{statCount}}</strong>
 {{#if statReady}}
+... loaded
 {{else}}
-  <p>Population data loading</p>
+... loading
 {{/if}}
+</p>
 </template>
 
 <template name="charts">
