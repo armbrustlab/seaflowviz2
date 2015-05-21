@@ -110,3 +110,11 @@ statStream.prototype._transform = function(data, encoding, done) {
   }
   done();
 };
+
+statStream.prototype._flush = function(done) {
+  var self = this;
+  if (self._cur) {
+    self.push(self._cur);
+  }
+  done();
+}
