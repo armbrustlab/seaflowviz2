@@ -4,29 +4,21 @@ Sfl = new Mongo.Collection("sfl")
 Meteor.startup(function() {
   Stat._ensureIndex({date: 1});
   Sfl._ensureIndex({date: 1});
-  Sfl._ensureIndex({date: 1, pop: 1});
 });
 
 Meteor.publish("stat", function() {
-  return Stat.find(
-    {
-      pop: {
-        $in: ["prochloro", "picoeuk", "beads", "synecho"]
-      }
-    },
+  return Stat.find({},
     {
       fields: {
-        date: 1,
-        pop: 1,
-        fsc_small: 1,
-        abundance: 1
+        cruise : 0,
+        owner: 0
       },
       sort: {
         date: 1
       }
     }
   );
-})
+});
 Meteor.publish("sfl", function() {
   return Sfl.find({},
     {
@@ -78,7 +70,7 @@ Meteor.methods({
     var addedDoc = false;
     // Only add if not in database by date+pop
     if (doc) {
-      dup = Stat.findOne({date: doc.date, pop: doc.pop});
+      dup = Stat.findOne({date: doc.date});
       if (! dup) {
         doc.owner = Meteor.userId();
         Stat.insert(doc);

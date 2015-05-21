@@ -40,7 +40,7 @@ Template.charts.rendered = function() {
   var madeSflPlots = false;
   var madePopPlots = false;
   var prevSfl = null;
-  var prevPop = {};
+  var prevPop = null;
 
   Sfl.find().observe({
     added: throttled(function(doc) {
@@ -62,7 +62,7 @@ Template.charts.rendered = function() {
       updateRangeChart();
       updateCharts();
       updateMap();
-    }, 300, function(doc) {
+    }, 1000, function(doc) {
       // If there is missing data (more than 3 minutes passed between points)
       // add an empty placeholder entry
       if (prevSfl && doc.date - prevSfl.date > 4 * 60 * 1000) {
@@ -92,25 +92,41 @@ Template.charts.rendered = function() {
         madePopPlots = true;
       }
       updateCharts();
-    }, 300, function(doc) {
+    }, 1000, function(doc) {
       // If there is missing data (more than 3 minutes passed between points)
       // add an empty placeholder entry
-      if (prevPop[doc.pop] && doc.date - prevPop[doc.pop].date > 4 * 60 * 1000) {
+      if (prevPop && doc.date - prevPop.date > 4 * 60 * 1000) {
         //console.log("detected missing pop ",  doc.pop, prevPop[doc.pop].date.toISOString(), doc.date.toISOString());
-        var spacer = {
-          date: new Date(prevPop[doc.pop].date.getTime() + (3 * 60 * 1000)),
-          abundance: null,
-          fsc_small: null,
-          pop: doc.pop
-        };
-        xfs.pop.add([spacer]);
+        _.keys(prevPop.pops).forEach(function(p) {
+          if (p === "unknown") {
+            return;
+          }
+          var spacer = {
+            date: new Date(prevPop.date.getTime() + (3 * 60 * 1000)),
+            abundance: null,
+            fsc_small: null,
+            pop: p
+          };
+          xfs.pop.add([spacer]);
+        });
       }
-      prevPop[doc.pop] = doc;
-      xfs.pop.add([doc]);
+      prevPop = doc;
+      _.keys(doc.pops).forEach(function(p) {
+        if (p === "unknown") {
+          return;
+        }
+        var popDoc = {
+          date: doc.date,
+          abundance: doc.pops[p].abundance,
+          fsc_small: doc.pops[p].fsc_small,
+          pop: p
+        };
+        xfs.pop.add([popDoc]);
+      });
     })
   });
 
-  var tileURL = 'http://localhost:4100/{z}/{x}/{y}.png';
+  var tileURL = 'http://173.250.187.201:3002/{z}/{x}/{y}.png';
   var attribution = 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>';
   cruiseMap = L.map('cruise-map').setView([47, -122], 4);
   L.Icon.Default.imagePath = '/leaflet/images';
@@ -830,13 +846,13 @@ var updateMap = (function() {
     });
     var latestLatLng = cruiseLocs[cruiseLocs.length-1].latLng;
     var latestCircle = new L.CircleMarker(latestLatLng, {
-      color: "grey",
+      color: "gray",
       radius: 6,
       weight: 2,
       opacity: 0.75
     });
     var allCruiseLine = new L.polyline(allLatLngs, {
-      color: "#FFFF33",
+      color: "gray",
       weight: 3,
       opacity: 0.5,
       smoothFactor: 1

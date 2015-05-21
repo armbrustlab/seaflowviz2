@@ -44,10 +44,10 @@ sflStream.prototype._line2doc = function(line) {
     file: fields[self._keys.file],
     lon: +fields[self._keys.lon],
     lat: +fields[self._keys.lat],
-    conductivity: +fields[self._keys.conductivity],
+    //conductivity: +fields[self._keys.conductivity],
     salinity: +fields[self._keys.salinity],
     temp: +fields[self._keys.ocean_tmp],
-    bulk_red: +fields[self._keys.bulk_red],
+    //bulk_red: +fields[self._keys.bulk_red],
     par: +fields[self._keys.par],
     cruise: fields[self._keys.cruise]
   };
@@ -60,7 +60,7 @@ sflStream.prototype._transform = function(data, encoding, done) {
   data = data.toString('utf8');
 
   if (data) {
-    if (++this._linecount === 1) {
+    if (++self._linecount === 1) {
       // column headers as doc keys
       data.split(',').forEach(function(k, i) {
         self._keys[k] = i;
