@@ -97,7 +97,7 @@ Template.charts.rendered = function() {
       // If there is missing data (more than 3 minutes passed between points)
       // add an empty placeholder entry
       if (prevPop && doc.date - prevPop.date > 4 * 60 * 1000) {
-        //console.log("detected missing pop ",  doc.pop, prevPop[doc.pop].date.toISOString(), doc.date.toISOString());
+        //console.log("detected missing pop ",  doc.pop, prevPop.date.toISOString(), doc.date.toISOString());
         _.keys(prevPop.pops).forEach(function(p) {
           if (p === "unknown") {
             return;
@@ -119,7 +119,7 @@ Template.charts.rendered = function() {
         var popDoc = {
           date: doc.date,
           abundance: doc.pops[p].abundance,
-          fsc_small: doc.pops[p].fsc_small,
+          fsc_small: Math.log10(doc.pops[p].fsc_small),
           pop: p
         };
         xfs.pop.add([popDoc]);
@@ -304,16 +304,16 @@ function reduceInitial() {
 // Make sure there are empty groups to interrupt line connections
 // when data is missing
 function addEmpty(group, binSize) {
-  var msIn3Min = 3 * 60 * 1000;
+  var msIn1Min = 60 * 1000;
   return {
     all: function() {
       var prev = null;
       var groups = [];
       group.all().forEach(function(g) {
-        if (prev && (g.key - prev) > binSize * msIn3Min) {
+        if (prev && (g.key - prev) > binSize * 3 * msIn1Min + msIn1Min) {
           //console.log("added empty group " + (new Date(prev.getTime() + binSize * msIn3Min).toISOString()) + " between " + g.key.toISOString() + " and " + prev.toISOString());
           groups.push({
-            key: new Date(prev.getTime() + binSize * msIn3Min),
+            key: new Date(prev.getTime() + binSize * 3 * msIn1Min),
             value: {count: 0, total: null}
           });
         } else {
@@ -329,7 +329,7 @@ function addEmpty(group, binSize) {
 // Make sure there are empty groups to interrupt line connections
 // when data is missing
 function addEmptyPop(group, binSize) {
-  var msIn3Min = 3 * 60 * 1000;
+  var msIn1Min = 60 * 1000;
   var keyAccessor = function(d) {
     return new Date(+(d.key.substr(0, 13)));
   };
@@ -343,9 +343,9 @@ function addEmptyPop(group, binSize) {
       group.all().forEach(function(g) {
         var pop = seriesAccessor(g);
         var date = keyAccessor(g);
-        if (prev[pop] && (date - prev[pop]) > binSize * msIn3Min) {
+        if (prev[pop] && (date - prev[pop]) > binSize * 3 * msIn1Min + msIn1Min) {
           //console.log("added empty group " + (new Date(prev.getTime() + binSize * msIn3Min).toISOString()) + " between " + g.key.toISOString() + " and " + prev.toISOString());
-          var newdate = new Date(prev[pop].getTime() + binSize * msIn3Min);
+          var newdate = new Date(prev[pop].getTime() + binSize * 3 * msIn1Min);
           groups.push({
             key: String(newdate.getTime()) + "_" + pop,
             value: {count: 0, total: null}
@@ -393,7 +393,7 @@ function initializeSflData() {
 
 function initializePopData() {
   var msIn3Min = 3 * 60 * 1000;
-  
+
   dims.datePop[1] = xfs.pop.dimension(function(d) { return String(d.date.getTime()) + "_" + d.pop; });
 
   // dims.date must have data from SFL by now!
@@ -429,7 +429,7 @@ plotting functions
 */
 function initializeSflPlots() {
   plotRangeChart("PAR (w/m2)");
-  // Only do intialize range chart filter (brush selection) dateRange is not 
+  // Only do intialize range chart filter (brush selection) dateRange is not
   // the whole data set.
   if (dateRange[0] !== dims.date[1].bottom(1)[0].date || dateRange[1] !== dims.date[1].top(1)[0].date) {
     charts.range.filter(dateRange);
@@ -633,7 +633,7 @@ function updateCharts() {
 
   var binSize = getBinSize(dateRange);
   console.log("points per bin = " + binSize);
-  
+
   // Clear filters for instrument plots and population plots
   [1,2,4,8,16,32].forEach(function(binSize) {
     dims.date[binSize].filterAll();
@@ -702,7 +702,7 @@ function updateRangeChart() {
     var filter = charts.range.filter();
     if (filter !== null) {
       // If the focus range is pinned to the right of the x axis (most recent)
-      // then 
+      // then
       if (pinnedToMostRecent) {
         // how much time has been added
         var delta = totalDateRange[1].getTime() - filter[1].getTime();
@@ -832,7 +832,7 @@ function filterPops() {
 var updateMap = (function() {
   var alreadyRun = false;
 
-  return function() {    
+  return function() {
     if (cruiseLocs.length === 0) {
       return;
     }
@@ -859,7 +859,7 @@ var updateMap = (function() {
       weight: 3,
       opacity: 0.5,
       smoothFactor: 1
-    }); 
+    });
     if (dateRange) {
       var selectedCruiseLine = new L.polyline(selectedLatLngs, {
         color: "red",
