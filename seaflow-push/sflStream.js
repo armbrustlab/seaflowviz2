@@ -51,7 +51,12 @@ sflStream.prototype._line2doc = function(line) {
     par: +fields[self._keys.par],
     cruise: fields[self._keys.cruise]
   };
-  return doc;
+
+  // Only return a doc if key values are numbers
+  if (! isNaN(doc.salinity) && ! isNaN(doc.temp) && ! isNaN(doc.par)) {
+    return doc;
+  }
+  return null;
 };
 
 sflStream.prototype._transform = function(data, encoding, done) {

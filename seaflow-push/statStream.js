@@ -62,7 +62,11 @@ statStream.prototype._line2doc = function(line) {
       //pe: +fields[self._keys.pe]
     }
   };
-  if (this._allowedPops[doc.pop]) {
+
+  if (this._allowedPops[doc.pop] &&
+    // Don't produce a record if all values aren't valid
+      ! isNaN(doc.popData.abundance) &&
+      ! isNaN(doc.popData.fsc_small)) {
     return doc;
   }
   return null;

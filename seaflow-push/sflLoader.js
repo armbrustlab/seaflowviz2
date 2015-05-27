@@ -23,7 +23,7 @@ uploader._write = function(chunk, err, next) {
       "addSfl",
       [chunk],
       function (err, result) {     // callback which returns the method call results
-        if (result) {
+        if (result && chunk) {
           console.log(chunk.date.toISOString() + " added to db");
         }
         next();

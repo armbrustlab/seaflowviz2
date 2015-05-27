@@ -22,8 +22,8 @@ uploader._write = function(chunk, err, next) {
     ddpClient.call(
       "addStat",
       [chunk],
-      function (err, result) {     // callback which returns the method call results 
-        if (result) {
+      function (err, result) {     // callback which returns the method call results
+        if (result && chunk) {          
           console.log(chunk.date.toISOString() + " added to db");
         }
         next();
@@ -42,7 +42,7 @@ process.stdout.on('error', function( err ) {
   }
 });
 
-if (process.argv.length < 2 || 
+if (process.argv.length < 2 ||
   (process.argv[2] === '-h' || process.argv[2] === '--help' || process.argv[2] === 'help')) {
   console.log('usage: ' + path.basename(process.argv[1]));
   process.exit(0)

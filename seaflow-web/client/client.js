@@ -269,7 +269,6 @@ Crossfilter functions
 // missing data.
 function reduceAdd(key) {
   return function(p, v) {
-    p.members.push(v);
     //console.log("adding: ", v.pop, v.time, v[key], p.count, p.total);
     if (v[key] !== null) {
       ++p.count;
@@ -298,7 +297,7 @@ function reduceRemove(key) {
 }
 
 function reduceInitial() {
-  return { count: 0, total: null, members: [] };
+  return { count: 0, total: null };
 }
 
 // Make sure there are empty groups to interrupt line connections
@@ -344,7 +343,7 @@ function addEmptyPop(group, binSize) {
         var pop = seriesAccessor(g);
         var date = keyAccessor(g);
         if (prev[pop] && (date - prev[pop]) > binSize * 3 * msIn1Min + msIn1Min) {
-          //console.log("added empty group " + (new Date(prev.getTime() + binSize * msIn3Min).toISOString()) + " between " + g.key.toISOString() + " and " + prev.toISOString());
+          //console.log("added empty group " + pop + " " + (new Date(prev[pop].getTime() + binSize * 3 * msIn1Min).toISOString()) + " between " + date.toISOString() + " and " + prev[pop].toISOString());
           var newdate = new Date(prev[pop].getTime() + binSize * 3 * msIn1Min);
           groups.push({
             key: String(newdate.getTime()) + "_" + pop,
