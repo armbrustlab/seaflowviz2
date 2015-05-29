@@ -143,21 +143,21 @@ Template.charts.rendered = function() {
 // every time inner is called
 function throttled(func, delay, every) {
   var counter = 0;
-  var inner = function(doc) {
+  var inner = function() {
+    var args = arguments;
     if (every) {
-      every(doc);
+      every.apply(every, args);
     }
     var myNumber = ++counter;
     Meteor.setTimeout(function() {
       if (myNumber == counter) {
-        func(doc);
+        func.apply(func, args);
         counter = 0;
       }
     }, delay);
   };
   return inner;
 };
-
 
 
 /*
@@ -463,44 +463,42 @@ function plotRangeChart(yAxisLabel) {
     .interpolate("cardinal")
     .clipPadding(10)
     .yAxisLabel(yAxisLabel)
-    //.xAxisLabel("Time (GMT)")
+    .xAxisLabel("Time (GMT)")
     .dimension(dim)
     .group(group)
     .valueAccessor(valueAccessor)
     .defined(function(d) { return (d.y !== null); });  // don't plot segements with missing data
-  chart.on("filtered", function(chart, filter) {
+  chart.on("filtered", throttled(function(chart, filter) {
     // Record latest date here before waiting for dc.events.trigger delay in case
     // newer data shows up in the meantime. We just want to know if selected date range
     // was latest at the time of selection.
     var latestDate = dims.date[1].top(1)[0].date;
-    dc.events.trigger(function() {
-      if (filter === null) {
-        // No time window selected, reset dateRange to entire cruise
-        dateRange = [dims.date[1].bottom(1)[0].date, dims.date[1].top(1)[0].date];
+    if (filter === null) {
+      // No time window selected, reset dateRange to entire cruise
+      dateRange = [dims.date[1].bottom(1)[0].date, dims.date[1].top(1)[0].date];
+    } else {
+      //console.log("filter set to " + filter.map(labelFormat).join(" - "));
+      // If a time window is selected and it extends to the latest time point
+      // then we set pinnedToMostRecent to true to make sure window always
+      // stays pinned to the right when new data is added.
+      // Check if filter range is pinned to most recent date at time of "filtered"
+      // event and right now.
+      if (filter[1].getTime() === dims.date[1].top(1)[0].date.getTime() ||
+          filter[1].getTime() === latestDate.getTime()) {
+        pinnedToMostRecent = true;
+        // In case newer data has arrived since filtered fired we'll set end
+        // filter range to current latest date
+        filter[1] = dims.date[1].top(1)[0].date;
+        //console.log("focus range pinned to most recent");
       } else {
-        //console.log("filter set to " + filter.map(labelFormat).join(" - "));
-        // If a time window is selected and it extends to the latest time point
-        // then we set pinnedToMostRecent to true to make sure window always
-        // stays pinned to the right when new data is added.
-        // Check if filter range is pinned to most recent date at time of "filtered"
-        // event and right now.
-        if (filter[1].getTime() === dims.date[1].top(1)[0].date.getTime() ||
-            filter[1].getTime() === latestDate.getTime()) {
-          pinnedToMostRecent = true;
-          // In case newer data has arrived since filtered fired we'll set end
-          // filter range to current latest date
-          filter[1] = dims.date[1].top(1)[0].date;
-          //console.log("focus range pinned to most recent");
-        } else {
-          pinnedToMostRecent = false;
-          //console.log("focus range unpinned");
-        }
-        dateRange = filter;  // set dateRange to filter window
+        pinnedToMostRecent = false;
+        //console.log("focus range unpinned");
       }
-      updateCharts();
-      updateMap();
-    }, 400);
-  });
+      dateRange = filter;  // set dateRange to filter window
+    }
+    updateCharts();
+    updateMap();
+  }, 400));
   chart.margins().left = 60;
   chart.yAxis().ticks(4);
   chart.yAxis().tickFormat(d3.format(".2f"));
@@ -632,12 +630,6 @@ function updateCharts() {
 
   var binSize = getBinSize(dateRange);
   console.log("points per bin = " + binSize);
-
-  // Clear filters for instrument plots and population plots
-  [1,2,4,8,16,32].forEach(function(binSize) {
-    dims.date[binSize].filterAll();
-    //dims.datePop[binSize].filterAll();
-  });
 
   ["temp", "salinity"].forEach(function(key) {
     if (charts[key]) {
