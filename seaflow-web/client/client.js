@@ -613,7 +613,7 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
     chart.margins().top = legendHeight + 5;
     chart.legend(dc.legend()
       .x(200)
-      .y(0)
+      .y(2)
       .itemHeight(legendHeight)
       .gap(10)
       .horizontal(true)
@@ -646,8 +646,6 @@ function updateCharts() {
       charts[key].expireCache();
       charts[key].x().domain(dateRange);
       recalculateY(charts[key], yDomains[key]);
-      // clear DOM nodes to prevent memory leaks before render
-      //charts[key].resetSvg();
       charts[key].render();
     }
   });
@@ -659,8 +657,6 @@ function updateCharts() {
       charts[key].expireCache();
       charts[key].x().domain(dateRange);
       recalculateY(charts[key], yDomains[key]);
-      // clear DOM nodes to prevent memory leaks before render
-      //charts[key].resetSvg();
       charts[key].render();
       configureLegendButtons(charts[key]);
     }
@@ -673,8 +669,6 @@ function updateCharts() {
       charts[key].expireCache();
       charts[key].x().domain(dateRange);
       recalculateY(charts[key], yDomains[key]);
-      // clear DOM nodes to prevent memory leaks before render
-      //charts[key].resetSvg();
       charts[key].render();
     }
   });
@@ -732,8 +726,6 @@ function updateRangeChart() {
     if (filter !== null) {
       charts.range.brush().extent(filter);
     }
-    // clear DOM nodes to prevent memory leaks before render
-    //charts.range.resetSvg();
     charts.range.render();
   }
 
@@ -788,8 +780,6 @@ function recalculateY(chart, yDomain) {
   }
 }
 
-// Needs to be called after chart with population legend is rendered.
-// Rendering resets onclick handler for buttons.
 function configureLegendButtons(chart) {
   if (! chart) {
     return;
@@ -798,6 +788,7 @@ function configureLegendButtons(chart) {
   legendGroups[0].forEach(function(g) {
     var commonPopName = g.childNodes[1].firstChild.data;
     var popName = popLookup[commonPopName];
+    // Set onclick handlers to show/hide data
     g.onclick = function() {
       // Show / Hide population specific data
       popFlags[popName] = !popFlags[popName];
@@ -805,17 +796,29 @@ function configureLegendButtons(chart) {
       // Recalculate Y domain, reset onclick
       if (charts.abundance) {
         recalculateY(charts.abundance);
-        //charts.abundance.resetSvg();
         charts.abundance.render();
+        // Rendering resets onclick handlers so need to reconfigure here
         configureLegendButtons(charts.abundance);
       }
       if (charts.fsc_small) {
         recalculateY(charts.fsc_small);
-        //charts.fsc_small.resetSvg();
         charts.fsc_small.render();
+        // Rendering resets onclick handlers so need to reconfigure here
         configureLegendButtons(charts.fsc_small);
       }
     };
+
+    // Update legend boxes to indicate if the pop is selected
+    var rect = g.childNodes[0];
+    // Create a stroke to highlight rect when fill is transparent
+    rect.setAttribute("stroke", rect.getAttribute("fill"));
+    rect.setAttribute("stroke-width", 2);
+    // Toggle rect tranparency to indicate selection
+    if (popFlags[popName]) {
+      rect.setAttribute("fill-opacity", 1);
+    } else {
+      rect.setAttribute("fill-opacity", 0);
+    }
   });
 }
 
