@@ -64,7 +64,7 @@ Template.charts.rendered = function() {
       updateMap();
       Session.set("recent", doc.date.toISOString());
     }, 1000, function(doc) {
-      // If there is missing data (more than 3 minutes passed between points)
+      // If there is missing data (more than 4 minutes passed between points)
       // add an empty placeholder entry
       if (prevSfl && doc.date - prevSfl.date > 4 * 60 * 1000) {
         //console.log("detected missing", prevSfl.date.toISOString(), doc.date.toISOString());
@@ -94,7 +94,7 @@ Template.charts.rendered = function() {
       }
       updateCharts();
     }, 1000, function(doc) {
-      // If there is missing data (more than 3 minutes passed between points)
+      // If there is missing data (more than 4 minutes passed between points)
       // add an empty placeholder entry
       if (prevPop && doc.date - prevPop.date > 4 * 60 * 1000) {
         //console.log("detected missing pop ",  doc.pop, prevPop.date.toISOString(), doc.date.toISOString());
@@ -441,8 +441,6 @@ function initializeSflPlots() {
 function initializePopPlots() {
   plotPopSeriesChart("abundance", "Abundance (10^6 cells/L)", legend = true);
   plotPopSeriesChart("fsc_small", "Forward scatter (a.u.)", legend = true);
-  configureLegendButtons(charts["abundance"]);
-  configureLegendButtons(charts["fsc_small"]);
 }
 
 function plotRangeChart(yAxisLabel) {
@@ -469,35 +467,25 @@ function plotRangeChart(yAxisLabel) {
     .valueAccessor(valueAccessor)
     .defined(function(d) { return (d.y !== null); });  // don't plot segements with missing data
   chart.on("filtered", throttled(function(chart, filter) {
-    // Record latest date here before waiting for dc.events.trigger delay in case
-    // newer data shows up in the meantime. We just want to know if selected date range
-    // was latest at the time of selection.
-    var latestDate = dims.date[1].top(1)[0].date;
     if (filter === null) {
       // No time window selected, reset dateRange to entire cruise
       dateRange = [dims.date[1].bottom(1)[0].date, dims.date[1].top(1)[0].date];
-    } else {
-      //console.log("filter set to " + filter.map(labelFormat).join(" - "));
+      updateCharts();
+      updateMap();
+    } else if (dateRange[0].getTime() !== filter[0].getTime() ||
+               dateRange[1].getTime() !== filter[1].getTime()) {
       // If a time window is selected and it extends to the latest time point
       // then we set pinnedToMostRecent to true to make sure window always
       // stays pinned to the right when new data is added.
-      // Check if filter range is pinned to most recent date at time of "filtered"
-      // event and right now.
-      if (filter[1].getTime() === dims.date[1].top(1)[0].date.getTime() ||
-          filter[1].getTime() === latestDate.getTime()) {
+      if (filter[1].getTime() === dims.date[1].top(1)[0].date.getTime()) {
         pinnedToMostRecent = true;
-        // In case newer data has arrived since filtered fired we'll set end
-        // filter range to current latest date
-        filter[1] = dims.date[1].top(1)[0].date;
-        //console.log("focus range pinned to most recent");
       } else {
         pinnedToMostRecent = false;
-        //console.log("focus range unpinned");
       }
       dateRange = filter;  // set dateRange to filter window
+      updateCharts();
+      updateMap();
     }
-    updateCharts();
-    updateMap();
   }, 400));
   chart.margins().left = 60;
   chart.yAxis().ticks(4);
@@ -609,19 +597,29 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
   // Legend setup
   if (legendFlag) {
     chart.margins().top = legendHeight + 5;
-    chart.legend(dc.legend()
+    // Must make legend and render in callback because the legend may get
+    // rendered after postRedraw and postRender may never be called, making it
+    // hard to know when to configure the legend.
+    chart.seaflowLegend = dc.legend()
       .x(200)
       .y(2)
       .itemHeight(legendHeight)
       .gap(10)
       .horizontal(true)
       .autoItemWidth(true)
-    );
+    chart.seaflowLegend.parent(chart);
+    chart.on("postRedraw", function(chart) {
+      chart.seaflowLegend.render();
+      configureLegend(chart);
+      // Clear postRedraw callback after first call. Basically mimic
+      // postRender because postRender callback may not get called
+      // https://github.com/dc-js/dc.js/issues/688
+      chart.on("postRedraw", function(chart) {});
+    });
   } else {
     // adjust chart size so that plot area is same size as chart with legend
     chart.height(chart.height() - legendHeight + 5);
   }
-
   chart.render();
 }
 
@@ -637,8 +635,7 @@ function updateCharts() {
       charts[key].group(addEmpty(groups[key][binSize], binSize));
       charts[key].expireCache();
       charts[key].x().domain(dateRange);
-      recalculateY(charts[key], yDomains[key]);
-      charts[key].render();
+      redrawChart(key)
     }
   });
 
@@ -648,9 +645,7 @@ function updateCharts() {
       charts[key].group(addEmptyPop(groups[key][binSize], binSize));
       charts[key].expireCache();
       charts[key].x().domain(dateRange);
-      recalculateY(charts[key], yDomains[key]);
-      charts[key].render();
-      configureLegendButtons(charts[key]);
+      redrawChart(key)
     }
   });
 
@@ -660,14 +655,26 @@ function updateCharts() {
       charts[key].group(addEmpty(groups[key][binSize], binSize));
       charts[key].expireCache();
       charts[key].x().domain(dateRange);
-      recalculateY(charts[key], yDomains[key]);
-      charts[key].render();
+      redrawChart(key)
     }
   });
 
   var t1 = new Date();
   console.log("chart updates took " + (t1.getTime() - t0.getTime()) / 1000);
   console.log("dateRange is " + dateRange.map(labelFormat).join(" - "));
+}
+
+function redrawChart(key) {
+  if (! charts[key]) {
+    return;
+  }
+  var t0 = new Date();
+  recalculateY(charts[key], yDomains[key]);
+  charts[key].redraw();
+  charts[key].renderYAxis();
+  charts[key].renderXAxis(charts[key].g());
+  var t1 = new Date();
+  console.log("chart " + key + " redraw took " + (t1.getTime() - t0.getTime()) / 1000);
 }
 
 function updateRangeChart() {
@@ -772,44 +779,53 @@ function recalculateY(chart, yDomain) {
   }
 }
 
-function configureLegendButtons(chart) {
+function configureLegend(chart) {
   if (! chart) {
     return;
   }
+
+  dressButtons();
+
   var legendGroups = chart.selectAll("g.dc-legend-item");
   legendGroups[0].forEach(function(g) {
-    var commonPopName = g.childNodes[1].firstChild.data;
-    var popName = popLookup[commonPopName];
+    var fullPopName = g.childNodes[1].firstChild.data;
+    var popName = popLookup[fullPopName];
+
     // Set onclick handlers to show/hide data
     g.onclick = function() {
-      // Show / Hide population specific data
-      popFlags[popName] = !popFlags[popName];
-      filterPops();
-      // Recalculate Y domain, reset onclick
-      if (charts.abundance) {
-        recalculateY(charts.abundance);
-        charts.abundance.render();
-        // Rendering resets onclick handlers so need to reconfigure here
-        configureLegendButtons(charts.abundance);
-      }
-      if (charts.fsc_small) {
-        recalculateY(charts.fsc_small);
-        charts.fsc_small.render();
-        // Rendering resets onclick handlers so need to reconfigure here
-        configureLegendButtons(charts.fsc_small);
-      }
-    };
+      popFlags[popName] = ! popFlags[popName];
 
-    // Update legend boxes to indicate if the pop is selected
-    var rect = g.childNodes[0];
-    // Create a stroke to highlight rect when fill is transparent
-    rect.setAttribute("stroke", rect.getAttribute("fill"));
-    rect.setAttribute("stroke-width", 2);
-    // Toggle rect tranparency to indicate selection
-    if (popFlags[popName]) {
-      rect.setAttribute("fill-opacity", 1);
-    } else {
-      rect.setAttribute("fill-opacity", 0);
+      dressButtons();  // do this first to hide plotting delay
+      filterPops();
+
+      // Update plot
+      ["abundance", "fsc_small"].forEach(function(key) {
+        redrawChart(key);
+      });
+    };
+  });
+}
+
+// Stylize buttons to indicate selection
+function dressButtons() {
+  ["abundance", "fsc_small"].forEach(function(key) {
+    if (charts[key]) {
+      var legendGroups = charts[key].selectAll("g.dc-legend-item");
+      legendGroups[0].forEach(function(g) {
+        var fullPopName = g.childNodes[1].firstChild.data;
+        var popName = popLookup[fullPopName];
+        var rect = g.childNodes[0];
+
+        // Create a stroke to highlight rect when fill is transparent
+        rect.setAttribute("stroke", rect.getAttribute("fill"));
+        rect.setAttribute("stroke-width", 2);
+        // Toggle rect tranparency to indicate selection
+        if (popFlags[popName]) {
+          rect.setAttribute("fill-opacity", 1);
+        } else {
+          rect.setAttribute("fill-opacity", 0);
+        }
+      });
     }
   });
 }
