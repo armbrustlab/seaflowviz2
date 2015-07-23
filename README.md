@@ -64,7 +64,7 @@ If not already started during first time setup
 
 ### Start tile server
 ```sh
-(cd seaflow-push && npm install)
+(cd seaflow-map && npm install)
 ./runTileserver.sh
 ```
 
