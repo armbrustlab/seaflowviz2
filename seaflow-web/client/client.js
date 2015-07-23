@@ -1,5 +1,5 @@
-Stat = new Mongo.Collection("stat")
-Sfl = new Mongo.Collection("sfl")
+Stat = new Mongo.Collection("stat");
+Sfl = new Mongo.Collection("sfl");
 var subHandles = {
   sfl: Meteor.subscribe("sfl"),
   stat: null
@@ -157,7 +157,7 @@ function throttled(func, delay, every) {
     }, delay);
   };
   return inner;
-};
+}
 
 
 /*
@@ -244,7 +244,7 @@ function roundDate(date, firstDate, binSizeMilli) {
 }
 
 function ceiling(input) {
-  return Math.floor(input + .99999999999);
+  return Math.floor(input + 0.99999999999);
 }
 
 function log(n, base) {
@@ -279,7 +279,7 @@ function reduceAdd(key) {
       p.total += v[key];
     }
     return p;
-  }
+  };
 }
 
 function reduceRemove(key) {
@@ -293,7 +293,7 @@ function reduceRemove(key) {
       p.total -= v[key];
     }
     return p;
-  }
+  };
 }
 
 function reduceInitial() {
@@ -444,7 +444,7 @@ function initializePopPlots() {
 }
 
 function plotRangeChart(yAxisLabel) {
-  var key = "range"
+  var key = "range";
   var chart = dc.lineChart("#" + key);
   charts[key] = chart;
 
@@ -563,8 +563,6 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
     .x(d3.time.scale.utc().domain(minMaxTime))
     .y(d3.scale.linear().domain(yAxisDomain))
     .ordinalColors(["#FFBB78", "#FF7F0E", "#1F77B4", "#AEC7E8"])
-    .renderHorizontalGridLines(true)
-    .renderVerticalGridLines(true)
     .dimension(dim)
     .group(group)
     .seriesAccessor(seriesAccessor)
@@ -592,7 +590,7 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
     });
   chart.margins().left = 60;
   chart.yAxis().ticks(6);
-  chart.yAxis().tickFormat(d3.format(".2f"))
+  chart.yAxis().tickFormat(d3.format(".2f"));
 
   // Legend setup
   if (legendFlag) {
@@ -606,7 +604,7 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
       .itemHeight(legendHeight)
       .gap(10)
       .horizontal(true)
-      .autoItemWidth(true)
+      .autoItemWidth(true);
     chart.seaflowLegend.parent(chart);
     chart.on("postRedraw", function(chart) {
       chart.seaflowLegend.render();
@@ -635,7 +633,7 @@ function updateCharts() {
       charts[key].group(addEmpty(groups[key][binSize], binSize));
       charts[key].expireCache();
       charts[key].x().domain(dateRange);
-      redrawChart(key)
+      redrawChart(key);
     }
   });
 
@@ -645,7 +643,7 @@ function updateCharts() {
       charts[key].group(addEmptyPop(groups[key][binSize], binSize));
       charts[key].expireCache();
       charts[key].x().domain(dateRange);
-      redrawChart(key)
+      redrawChart(key);
     }
   });
 
@@ -655,7 +653,7 @@ function updateCharts() {
       charts[key].group(addEmpty(groups[key][binSize], binSize));
       charts[key].expireCache();
       charts[key].x().domain(dateRange);
-      redrawChart(key)
+      redrawChart(key);
     }
   });
 
@@ -712,10 +710,11 @@ function updateRangeChart() {
     charts.range.dimension(dims.range[rangeBinSize]);
     charts.range.group(groups.range[rangeBinSize]);
     charts.range.expireCache();
+    var yAxisDomain;
     if (! yDomains.range) {
-      var yAxisDomain = d3.extent(groups.range[rangeBinSize].all(), valueAccessor);
+      yAxisDomain = d3.extent(groups.range[rangeBinSize].all(), valueAccessor);
     } else {
-      var yAxisDomain = yDomains.range;
+      yAxisDomain = yDomains.range;
     }
     charts.range.x().domain(totalDateRange);
     charts.range.y().domain(yAxisDomain);
@@ -739,25 +738,27 @@ function recalculateY(chart, yDomain) {
       return;
   }
   if (! yDomain) {
+    var timeKey;
     if (chart.children !== undefined) {
       // Population series plot
       // key for dimension is [time, pop]
-      var timeKey = function(element) {
+      timeKey = function(element) {
         var parts = element.key.split("_");
         return new Date(+parts[0]);
       };
     } else {
       // Single line chart
       // key for dimension is time
-      var timeKey = function(element) { return element.key; };
+      timeKey = function(element) { return element.key; };
     }
 
+    var valueInRange;
     if (dateRange) {
-      var valuesInRange = chart.group().all().filter(function(element, index, array) {
+      valuesInRange = chart.group().all().filter(function(element, index, array) {
         return (timeKey(element) >= dateRange[0] && timeKey(element) <= dateRange[1]);
       });
     } else {
-      var valuesInRange = chart.group().all();
+      valuesInRange = chart.group().all();
     }
 
     // If data has been filtered, some group elements may have no data, which would
@@ -770,8 +771,8 @@ function recalculateY(chart, yDomain) {
     });
     // Make sure there is some distance within Y axis if all values are the same
     if (minMaxY[1] - minMaxY[0] === 0) {
-      minMaxY[0] -= .1;
-      minMaxY[1] += .1;
+      minMaxY[0] -= 0.1;
+      minMaxY[1] += 0.1;
     }
     chart.y(d3.scale.linear().domain(minMaxY));
   } else {
@@ -870,6 +871,7 @@ var updateMap = (function() {
       opacity: 0.5,
       smoothFactor: 1
     });
+    var fg;
     if (dateRange) {
       var selectedCruiseLine = new L.polyline(selectedLatLngs, {
         color: "red",
@@ -877,9 +879,9 @@ var updateMap = (function() {
         opacity: 0.5,
         smoothFactor: 1
       });
-      var fg = L.featureGroup([allCruiseLine, selectedCruiseLine, latestCircle]);
+      fg = L.featureGroup([allCruiseLine, selectedCruiseLine, latestCircle]);
     } else {
-      var fg = L.featureGroup([allCruiseLine, latestCircle]);
+      fg = L.featureGroup([allCruiseLine, latestCircle]);
     }
 
     if (cruiseLayer) {
