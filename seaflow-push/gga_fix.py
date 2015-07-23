@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import os
 import sys
 import argparse
 
@@ -25,11 +24,12 @@ def ddm2dd(ddm):
 def gga2ddm(gga):
     try:
         dot_index = gga.index(".")
-        degrees = gga[:gga.index(".")-2]
-        decimal_minutes = gga[gga.index(".")-2:]
+        degrees = gga[:dot_index-2]
+        decimal_minutes = gga[dot_index-2:]
     except ValueError:
-        degrees = gga[:2]
-        decimal_minutes = gga[2:]
+        # If no decimal, degrees should start two from the end of the string
+        degrees = gga[:-2]
+        decimal_minutes = gga[-2:]
     return (degrees, decimal_minutes)
 
 # Convert from GGA coordinate string to decimal degrees string
