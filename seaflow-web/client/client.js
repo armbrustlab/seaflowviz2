@@ -64,21 +64,6 @@ Template.charts.rendered = function() {
       updateMap();
       Session.set("recent", doc.date.toISOString());
     }, 1000, function(doc) {
-      // If there is missing data (more than 4 minutes passed between points)
-      // add an empty placeholder entry
-      if (prevSfl && doc.date - prevSfl.date > 4 * 60 * 1000) {
-        //console.log("detected missing", prevSfl.date.toISOString(), doc.date.toISOString());
-        var spacer = {
-          date: new Date(prevSfl.date.getTime() + (3 * 60 * 1000)),
-          salinity: null,
-          temp: null,
-          velocity: null,
-          par: null
-        };
-        xfs.sfl.add([spacer]);
-        xfs.range.add([spacer]);
-      }
-      prevSfl = doc;
       xfs.sfl.add([doc]);
       xfs.range.add([doc]);
       cruiseLocs.push({lat: doc.lat, lon: doc.lon, date: doc.date});
@@ -94,24 +79,6 @@ Template.charts.rendered = function() {
       }
       updateCharts();
     }, 1000, function(doc) {
-      // If there is missing data (more than 4 minutes passed between points)
-      // add an empty placeholder entry
-      if (prevPop && doc.date - prevPop.date > 4 * 60 * 1000) {
-        //console.log("detected missing pop ",  doc.pop, prevPop.date.toISOString(), doc.date.toISOString());
-        _.keys(prevPop.pops).forEach(function(p) {
-          if (p === "unknown") {
-            return;
-          }
-          var spacer = {
-            date: new Date(prevPop.date.getTime() + (3 * 60 * 1000)),
-            abundance: null,
-            fsc_small: null,
-            pop: p
-          };
-          xfs.pop.add([spacer]);
-        });
-      }
-      prevPop = doc;
       _.keys(doc.pops).forEach(function(p) {
         if (p === "unknown") {
           return;
@@ -176,6 +143,14 @@ var groups = {
 // dc.js charts
 var charts = {};
 dc.disableTransitions = true;
+
+/*
+// Browser console debugging
+window._groups = groups;
+window._dims = dims;
+window._xfs = xfs;
+window._charts = charts;
+*/
 
 /*
 Map stuff
@@ -253,6 +228,8 @@ function log(n, base) {
 
 function valueAccessor(d) {
   if (d.value.total === null || d.value.count === 0) {
+    // D3 plots are setup so that if a y value is null the line segement
+    // is broken to indicate missing data.
     return null;
   } else {
     return d.value.total / d.value.count;
@@ -309,10 +286,13 @@ function addEmpty(group, binSize) {
       var prev = null;
       var groups = [];
       group.all().forEach(function(g) {
+        // If the gap between data is more than <bucket size> + 1 minute,
+        // insert a null data point to break line segment.
         if (prev && (g.key - prev) > binSize * 3 * msIn1Min + msIn1Min) {
-          //console.log("added empty group " + (new Date(prev.getTime() + binSize * msIn3Min).toISOString()) + " between " + g.key.toISOString() + " and " + prev.toISOString());
+          var newdate = new Date(prev.getTime() + binSize * 3 * msIn1Min);
+          //console.log("added empty group " + newdate.toISOString()) + " between " + g.key.toISOString() + " and " + prev.toISOString());
           groups.push({
-            key: new Date(prev.getTime() + binSize * 3 * msIn1Min),
+            key: newdate,
             value: {count: 0, total: null}
           });
         } else {
@@ -342,9 +322,11 @@ function addEmptyPop(group, binSize) {
       group.all().forEach(function(g) {
         var pop = seriesAccessor(g);
         var date = keyAccessor(g);
+        // If the gap between data is more than <bucket size> + 1 minute,
+        // insert a null data point to break line segment.
         if (prev[pop] && (date - prev[pop]) > binSize * 3 * msIn1Min + msIn1Min) {
-          //console.log("added empty group " + pop + " " + (new Date(prev[pop].getTime() + binSize * 3 * msIn1Min).toISOString()) + " between " + date.toISOString() + " and " + prev[pop].toISOString());
           var newdate = new Date(prev[pop].getTime() + binSize * 3 * msIn1Min);
+          //console.log("added empty group " + pop + " " + newdate.toISOString() + " between " + date.toISOString() + " and " + prev[pop].toISOString());
           groups.push({
             key: String(newdate.getTime()) + "_" + pop,
             value: {count: 0, total: null}
@@ -358,6 +340,8 @@ function addEmptyPop(group, binSize) {
     }
   };
 }
+
+window._addEmpty = addEmpty;
 
 function initializeSflData() {
   var msIn3Min = 3 * 60 * 1000;
@@ -428,7 +412,7 @@ plotting functions
 */
 function initializeSflPlots() {
   plotRangeChart("PAR (w/m2)");
-  // Only do intialize range chart filter (brush selection) dateRange is not
+  // Only do intialize range chart filter (brush selection) if dateRange is not
   // the whole data set.
   if (dateRange[0] !== dims.date[1].bottom(1)[0].date || dateRange[1] !== dims.date[1].top(1)[0].date) {
     charts.range.filter(dateRange);
@@ -708,7 +692,7 @@ function updateRangeChart() {
       dateRange = totalDateRange;  // update dateRange
     }
     charts.range.dimension(dims.range[rangeBinSize]);
-    charts.range.group(groups.range[rangeBinSize]);
+    charts.range.group(addEmpty(groups.range[rangeBinSize], rangeBinSize));
     charts.range.expireCache();
     var yAxisDomain;
     if (! yDomains.range) {
