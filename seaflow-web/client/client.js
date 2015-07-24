@@ -39,8 +39,6 @@ Template.status.helpers({
 Template.charts.rendered = function() {
   var madeSflPlots = false;
   var madePopPlots = false;
-  var prevSfl = null;
-  var prevPop = null;
 
   Sfl.find().observe({
     added: throttled(function(doc) {
