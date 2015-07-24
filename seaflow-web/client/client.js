@@ -288,14 +288,15 @@ function addEmpty(group, binSize) {
         // insert a null data point to break line segment.
         if (prev && (g.key - prev) > binSize * 3 * msIn1Min + msIn1Min) {
           var newdate = new Date(prev.getTime() + binSize * 3 * msIn1Min);
-          //console.log("added empty group " + newdate.toISOString()) + " between " + g.key.toISOString() + " and " + prev.toISOString());
+          /*console.log("added empty group " + newdate.toISOString()) +
+                      " between " + prev.toISOString() + " and " +
+                      g.key.toISOString());*/
           groups.push({
             key: newdate,
             value: {count: 0, total: null}
           });
-        } else {
-          groups.push(g);
         }
+        groups.push(g);
         prev = g.key;
       });
       return groups;
@@ -324,14 +325,15 @@ function addEmptyPop(group, binSize) {
         // insert a null data point to break line segment.
         if (prev[pop] && (date - prev[pop]) > binSize * 3 * msIn1Min + msIn1Min) {
           var newdate = new Date(prev[pop].getTime() + binSize * 3 * msIn1Min);
-          //console.log("added empty group " + pop + " " + newdate.toISOString() + " between " + date.toISOString() + " and " + prev[pop].toISOString());
+          /*console.log("added empty group " + pop + " " + newdate.toISOString()
+                      + " between " + prev[pop].toISOString() + " and " +
+                      date.toISOString());*/
           groups.push({
             key: String(newdate.getTime()) + "_" + pop,
             value: {count: 0, total: null}
           });
-        } else {
-          groups.push(g);
         }
+        groups.push(g);
         prev[pop] = date;
       });
       return groups;
@@ -339,7 +341,11 @@ function addEmptyPop(group, binSize) {
   };
 }
 
+/*
+// Browser console debugging
 window._addEmpty = addEmpty;
+window._addEmptyPop = addEmptyPop;
+*/
 
 function initializeSflData() {
   var msIn3Min = 3 * 60 * 1000;
@@ -535,6 +541,14 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
     return popLookup[d.key.substr(14)];
   };
 
+  // Create label for each point from key
+  // e.g. "1437259296000_beads" becomes a date and "beads"
+  var titleFunc = function(d) {
+    return labelFormat(keyAccessor(d)) + "\n" + d3.format(".2f")(valueAccessor(d));
+  };
+  // Bind to window for easy browswer console debugging
+  //window._titleFunc = titleFunc;
+
   var minMaxY = d3.extent(group.all(), valueAccessor);
   var legendHeight = 15;  // size of legend
 
@@ -554,9 +568,7 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
     .clipPadding(10)
     .yAxisLabel(yAxisLabel)
     .xAxisLabel("Time (GMT)")
-    .title(function(d) {
-      return labelFormat(keyAccessor(d)) + "\n" + d3.format(".2f")(valueAccessor(d));
-    })
+    .title(titleFunc)
     .childOptions(
     {
       defined: function(d) {
