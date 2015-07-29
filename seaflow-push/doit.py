@@ -19,9 +19,6 @@ def main():
     # Find the SFL.CSV file
     sfl_file = "sfl-gga2dd.csv"
     sfl_table = "sfl.csv"
-    # Find the cstar.csv file
-    cstar_file = "cstar.csv"
-    cstar_table = "cstar.csv"
 
     # Find the cstar3min.csv file
     cstar3_file = "cstar3min.csv"
@@ -34,9 +31,6 @@ def main():
 
     print("updating SFL...")
     sql.uploadone(sfl_file, sfl_table)
-
-    print("updating CSTAR...")
-    sql.uploadone(cstar_file, cstar_table)
 
     print("updating CSTAR 3 min...")
     sql.uploadone(cstar3_file, cstar3_table)
