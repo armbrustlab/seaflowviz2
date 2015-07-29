@@ -1,5 +1,5 @@
-Stat = new Mongo.Collection("stat")
-Sfl = new Mongo.Collection("sfl")
+Stat = new Mongo.Collection("stat");
+Sfl = new Mongo.Collection("sfl");
 
 Meteor.startup(function() {
   Stat._ensureIndex({date: 1});
@@ -28,8 +28,7 @@ Meteor.publish("sfl", function() {
         lon: 1,
         par: 1,
         temp: 1,
-        salinity: 1,
-        velocity: 1
+        salinity: 1
       },
       sort: {
         date: 1
@@ -55,7 +54,6 @@ Meteor.methods({
           'type': 'Point',
           'coordinates': [doc.lon, doc.lat]
         };
-        doc.velocity = 0;
         Sfl.insert(doc);
         addedDoc = true;
       }

@@ -39,6 +39,7 @@ Template.status.helpers({
 Template.charts.rendered = function() {
   var madeSflPlots = false;
   var madePopPlots = false;
+  var prevSfl;
 
   Sfl.find().observe({
     added: throttled(function(doc) {
@@ -62,6 +63,14 @@ Template.charts.rendered = function() {
       updateMap();
       Session.set("recent", doc.date.toISOString());
     }, 1000, function(doc) {
+      // Calculate average speed between this point and last
+      if (prevSfl) {
+        doc.speed = geo2knots([prevSfl.lat, prevSfl.lon], [doc.lat, doc.lon],
+                              prevSfl.date, doc.date);
+      } else {
+        doc.speed = null;
+      }
+      prevSfl = doc;
       xfs.sfl.add([doc]);
       xfs.range.add([doc]);
       cruiseLocs.push({lat: doc.lat, lon: doc.lon, date: doc.date});
@@ -134,7 +143,7 @@ var xfs = { "sfl": crossfilter(), "range": crossfilter(), "pop": crossfilter() }
 var dims = { "date": [], "range": [], "pop": [], "datePop": [] };
 // crossfilter groups
 var groups = {
-  "velocity": [], "temp": [], "salinity": [], "range": [],
+  "speed": [], "temp": [], "salinity": [], "range": [],
   "abundance": [], "fsc_small": []
 };
 
@@ -165,7 +174,7 @@ var labelFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S GMT");
 // default y domain limits
 var yDomains = {
   range: [0, 0.3],
-  velocity: [0, 20],
+  speed: [0, 20],
   temp: null,
   salinity: null,
   par: null,
@@ -357,7 +366,7 @@ function initializeSflData() {
     });
   });
 
-  ["temp", "salinity"].forEach(function(key) {
+  ["speed", "temp", "salinity"].forEach(function(key) {
     [1,2,4,8,16,32].forEach(function(binSize) {
       groups[key][binSize] = dims.date[binSize].group().reduce(
         reduceAdd(key), reduceRemove(key), reduceInitial);
@@ -421,7 +430,7 @@ function initializeSflPlots() {
   if (dateRange[0] !== dims.date[1].bottom(1)[0].date || dateRange[1] !== dims.date[1].top(1)[0].date) {
     charts.range.filter(dateRange);
   }
-  //plotLineChart("velocity", "Speed (knots)");
+  plotLineChart("speed", "Speed (knots)");
   plotLineChart("temp", "Temp (degC)");
   plotLineChart("salinity", "Salinity (psu)");
 }
@@ -621,7 +630,7 @@ function updateCharts() {
   var binSize = getBinSize(dateRange);
   console.log("points per bin = " + binSize);
 
-  ["temp", "salinity"].forEach(function(key) {
+  ["speed", "temp", "salinity"].forEach(function(key) {
     if (charts[key]) {
       charts[key].dimension(dims.date[binSize]);
       charts[key].group(addEmpty(groups[key][binSize], binSize));
@@ -832,6 +841,47 @@ function filterPops() {
       return popFlags[d];
     });
   }
+}
+
+// Return the distance between two coordinates in km
+// http://stackoverflow.com/questions/365826/calculate-distance-between-2-gps-coordinates
+// by cletus.  Which answer was itself based on
+// http://www.movable-type.co.uk/scripts/latlong.html
+//
+// Args:
+//     lonlat1 and lonlat2 are two-item arrays of decimal degree
+//     latitude and longitude.
+function geo2km(lonlat1, lonlat2) {
+  if (! lonlat1 || ! lonlat2) {
+    return 0;
+  }
+  var toRad = function(degree) { return degree * (Math.PI / 180); };
+  var R = 6371; // km radius of Earth
+  var dLat = toRad(lonlat2[1] - lonlat1[1]);
+  var dLon = toRad(lonlat2[0] - lonlat1[0]);
+  var lat1 = toRad(lonlat1[1]);
+  var lat2 = toRad(lonlat2[1]);
+
+  var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+          Math.sin(dLon/2) * Math.sin(dLon/2) * Math.cos(lat1) * Math.cos(lat2);
+  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  var d = R * c;
+  return d;
+}
+
+// Return speed in knots traveling between lonlat1 and lonlat2 during time
+// interval t1 to t2.
+//
+// Args:
+//     lonlat1 and lonlat2 are two-item arrays of decimal degree
+//     latitude and longitude.
+//
+//     t1 and t2 are Date objects corresponding to coordinates.
+function geo2knots(lonlat1, lonlat2, t1, t2) {
+  kmPerKnot = 1.852;  // 1 knot = 1.852 km/h
+  km = geo2km(lonlat1, lonlat2);
+  hours = (t2.getTime() - t1.getTime()) / 1000 / 60 / 60;
+  return km / hours;
 }
 
 var updateMap = (function() {
