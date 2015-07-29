@@ -174,7 +174,7 @@ var labelFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S GMT");
 // default y domain limits
 var yDomains = {
   range: [0, 0.3],
-  speed: [0, 20],
+  speed: [0, 15],
   temp: null,
   salinity: null,
   par: null,
@@ -881,7 +881,7 @@ function geo2knots(lonlat1, lonlat2, t1, t2) {
   kmPerKnot = 1.852;  // 1 knot = 1.852 km/h
   km = geo2km(lonlat1, lonlat2);
   hours = (t2.getTime() - t1.getTime()) / 1000 / 60 / 60;
-  return km / hours;
+  return km / hours / kmPerKnot;
 }
 
 var updateMap = (function() {
