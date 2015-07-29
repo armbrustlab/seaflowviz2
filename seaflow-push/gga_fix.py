@@ -1,27 +1,33 @@
 #!/usr/bin/env python
-
-import sys
+"""Convert coordinates in seaflow files to decimal degree from GGA."""
 import argparse
+import sys
 
-# Convert degrees decimal minutes coordinate to decimal degrees
-# Args:
-#   ddm = two item list: [degrees string, decimal minutes string]
-#         e.g. ["21", 16.6922"]
-# Return:
-#   A decimal degree string with precision to 4 decimal places (11.132 m)
-#   e.g. "21.2782"
+
 def ddm2dd(ddm):
+    """Convert degrees decimal minutes coordinate to decimal degrees.
+
+    Args:
+        ddm = two item list: [degrees string, decimal minutes string]
+              e.g. ["21", 16.6922"]
+    Returns:
+        A decimal degree string with precision to 4 decimal places
+        e.g. "21.2782". This has resolution down to 11.132 m.
+    """
     dd = int(ddm[0]) + (float(ddm[1]) / 60)
     return "%.04f" % dd
 
-# Convert from GGA coordinate to degree decimal minutes
-# Args:
-#   gga_string = GGA format coordinate string, e.g. "2116.6922"
-#
-# Return:
-#   A two-item tuple of of strings (degrees, decimal minutes).
-#   e.g. ("21", "16.6922")
+
 def gga2ddm(gga):
+    """Convert from GGA coordinate to degree decimal minutes.
+
+    Args:
+        gga_string = GGA format coordinate string, e.g. "2116.6922"
+
+    Returns:
+        A two-item tuple of of strings (degrees, decimal minutes).
+        e.g. ("21", "16.6922")
+    """
     try:
         dot_index = gga.index(".")
         degrees = gga[:dot_index-2]
@@ -32,13 +38,24 @@ def gga2ddm(gga):
         decimal_minutes = gga[-2:]
     return (degrees, decimal_minutes)
 
-# Convert from GGA coordinate string to decimal degrees string
-# with precision to 4 decimal places (11.132 m)
-# e.g. "2116.6922" -> "21.2782"
+
 def gga2dd(gga):
+    """Convert from GGA coordinate string to decimal degrees string.
+
+    Precision to 4 decimal places (11.132 m)
+    e.g. "2116.6922" -> "21.2782"
+    """
     return ddm2dd(gga2ddm(gga))
 
+
 def csv_gga2dd(csv_in, csv_out):
+    """Convert coords in SeaFlow csv file to decimal degrees from GGA.
+
+    Args:
+        csv_in: Input CSV file path. File should have coords in columns
+                headers "lat" and "lon".
+        csv_out: Output CSV file path
+    """
     with open(csv_in) as fin:
         with open(csv_out, "w") as fout:
             lines = fin.readlines()
@@ -51,7 +68,7 @@ def csv_gga2dd(csv_in, csv_out):
                 fields = line.split(",")
                 try:
                     fields[lat_index] = gga2dd(fields[lat_index])
-                except:
+                except IndexError:
                     sys.stderr.write("%i: %s\n" % (i, line))
                     raise
 
@@ -62,8 +79,8 @@ def csv_gga2dd(csv_in, csv_out):
                     fields[lon_index] = gga2dd(fields[lon_index])
                     if fields[lon_index][0] != "-":
                         fields[lon_index] = "-" + fields[lon_index]
-                except:
-
+                except IndexError:
+                    sys.stderr.write("%i: %s\n" % (i, line))
                     raise
 
                 fout.write(",".join(fields))
