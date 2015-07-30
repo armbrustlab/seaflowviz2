@@ -10,10 +10,10 @@ process.stdout.on('error', function( err ) {
     }
 });
 
-if (process.argv.length < 2 || 
+if (process.argv.length < 2 ||
     (process.argv[2] === '-h' || process.argv[2] === '--help' || process.argv[2] === 'help')) {
         console.log('usage: ' + path.basename(process.argv[1]));
-        process.exit(0)
+        process.exit(0);
 } else {
     // stdin
     var sfl = sflStream();

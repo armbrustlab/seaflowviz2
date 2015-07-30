@@ -34,8 +34,8 @@ sflStream.prototype._line2doc = function(line) {
 
   // Check that this line has correct field count
   if (fields.length !== Object.keys(self._keys).length) {
-    self.emit('error', new Error('field count != header column count, line='
-      + self._linecount + ', cruise=' + self.cruise));
+    self.emit('error', new Error('field count != header column count, line=' +
+              self._linecount + ', cruise=' + self.cruise));
     return;
   }
 

@@ -1,5 +1,6 @@
 Stat = new Mongo.Collection("stat");
 Sfl = new Mongo.Collection("sfl");
+Cstar = new Mongo.Collection("cstar");
 
 Meteor.startup(function() {
   Stat._ensureIndex({date: 1});
@@ -29,6 +30,19 @@ Meteor.publish("sfl", function() {
         par: 1,
         temp: 1,
         salinity: 1
+      },
+      sort: {
+        date: 1
+      }
+    }
+  );
+});
+Meteor.publish("cstar", function() {
+  return Cstar.find({},
+    {
+      fields: {
+        date: 1,
+        attenuation: 1
       },
       sort: {
         date: 1
@@ -76,5 +90,22 @@ Meteor.methods({
       }
     }
     return addedDoc;
-  }
+  },
+  addCstar: function (doc) {
+    // Make sure the user is logged in before inserting a task
+    if (! Meteor.userId()) {
+      throw new Meteor.Error("not-authorized");
+    }
+    var addedDoc = false;
+    // Only add if not in database by date
+    if (doc) {
+      dup = Cstar.findOne({date: doc.date});
+      if (! dup) {
+        doc.owner = Meteor.userId();
+        Cstar.insert(doc);
+        addedDoc = true;
+      }
+    }
+    return addedDoc;
+  },
 });

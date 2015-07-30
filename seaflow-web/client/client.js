@@ -1,19 +1,14 @@
 Stat = new Mongo.Collection("stat");
 Sfl = new Mongo.Collection("sfl");
+Cstar = new Mongo.Collection("cstar");
+
 var subHandles = {
   sfl: Meteor.subscribe("sfl"),
-  stat: null
+  stat: null,
+  cstar: null
 };
-Session.set("sflReady", false);
-Session.set("statReady", false);
-Session.set("recent", null);
 
-Tracker.autorun(function(computation) {
-  if (subHandles.sfl.ready()) {
-    Session.set("sflReady", true);
-    computation.stop();
-  }
-});
+Session.set("recent", null);
 
 /*
 Template functions
@@ -25,11 +20,8 @@ Template.status.helpers({
   statCount: function() {
     return Stat.find().count();
   },
-  sflReady: function() {
-    return Session.get("sflReady");
-  },
-  statReady: function() {
-    return Session.get("statReady");
+  cstarCount: function() {
+    return Cstar.find().count();
   },
   recent: function() {
     return Session.get("recent");
@@ -41,76 +33,95 @@ Template.charts.rendered = function() {
   var madePopPlots = false;
   var prevSfl;
 
+  // Define how to handle new SFL data
   Sfl.find().observe({
-    added: throttled(function(doc) {
-      if (! madeSflPlots) {
-        initializeSflData();
-        initializeDateRange();
-        initializeSflPlots();
-        madeSflPlots = true;
-
-        // Subscribe to stat after SFL data has been received
-        subHandles.stat = Meteor.subscribe("stat");
-        Tracker.autorun(function(computation) {
-          if (subHandles.stat.ready()) {
-            Session.set("statReady", true);
-            computation.stop();
-          }
-        });
-      }
-      updateRangeChart();
-      updateCharts();
-      updateMap();
-      Session.set("recent", doc.date.toISOString());
-    }, 1000, function(doc) {
-      // Calculate average speed between this point and last
-      if (prevSfl) {
-        doc.speed = geo2knots([prevSfl.lat, prevSfl.lon], [doc.lat, doc.lon],
-                              prevSfl.date, doc.date);
-      } else {
-        doc.speed = null;
-      }
-      prevSfl = doc;
-      xfs.sfl.add([doc]);
-      xfs.range.add([doc]);
-      cruiseLocs.push({lat: doc.lat, lon: doc.lon, date: doc.date});
-    })
+    added: sflAdded()
   });
 
+  // Define how to handle new stats data
   Stat.find().observe({
-    added: throttled(function(doc) {
-      if (! madePopPlots) {
-        initializePopData();
-        initializePopPlots();
-        madePopPlots = true;
-      }
-      updateCharts();
-    }, 1000, function(doc) {
-      _.keys(doc.pops).forEach(function(p) {
-        if (p === "unknown") {
-          return;
-        }
-        var popDoc = {
-          date: doc.date,
-          abundance: doc.pops[p].abundance,
-          fsc_small: Math.log10(doc.pops[p].fsc_small),
-          pop: p
-        };
-        xfs.pop.add([popDoc]);
-      });
-    })
+    added: statAdded()
   });
 
-  var tileURL = 'http://173.250.187.201:3002/{z}/{x}/{y}.png';
-  var attribution = 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>';
-  cruiseMap = L.map('cruise-map').setView([47, -122], 4);
-  L.Icon.Default.imagePath = '/leaflet/images';
-  var tileLayer = L.tileLayer(tileURL, {
-    attribution: attribution,
-    maxZoom: 8
+  // Define how to handle new cstar data
+  Cstar.find().observe({
+    added: cstarAdded()
   });
-  tileLayer.addTo(cruiseMap);
+
+  setupMap();  // Draw initial map
 };
+
+// Incorporate new SFL data as it arrives
+function sflAdded() {
+  var madeSflPlots = false;
+  var prevSfl;
+  var f = throttled(function(doc) {
+    if (! madeSflPlots) {
+      initializeSflData();
+      initializeDateRange();
+      initializeSflPlots();
+      madeSflPlots = true;
+
+      // Subscribe to other data publications after SFL data has been received
+      subHandles.stat = Meteor.subscribe("stat");
+      subHandles.cstar = Meteor.subscribe("cstar");
+    }
+    updateRangeChart();
+    updateCharts();
+    updateMap();
+    Session.set("recent", doc.date.toISOString());
+  }, 1000, function(doc) {
+    addSpeed(prevSfl, doc);
+    prevSfl = doc;
+    xfs.sfl.add([doc]);
+    xfs.range.add([doc]);
+    cruiseLocs.push({lat: doc.lat, lon: doc.lon, date: doc.date});
+  });
+  return f;
+}
+
+// Incorporate new stats (population) data as it arrives
+function statAdded() {
+  var madePopPlots = false;
+  var f = throttled(function(doc) {
+    if (! madePopPlots) {
+      initializePopData();
+      initializePopPlots();
+      madePopPlots = true;
+    }
+    updateCharts();
+  }, 1000, function(doc) {
+    _.keys(doc.pops).forEach(function(p) {
+      if (p === "unknown") {
+        return;
+      }
+      var popDoc = {
+        date: doc.date,
+        abundance: doc.pops[p].abundance,
+        fsc_small: Math.log10(doc.pops[p].fsc_small),
+        pop: p
+      };
+      xfs.pop.add([popDoc]);
+    });
+  });
+  return f;
+}
+
+// Incorporate new cstar data as it arrives
+function cstarAdded() {
+  var madeCstarPlots = false;
+  var f = throttled(function(doc) {
+    if (! madeCstarPlots) {
+      initializeCstarData();
+      initializeCstarPlots();
+      madeCstarPlots = true;
+    }
+    updateCharts();
+  }, 1000, function(doc) {
+      xfs.cstar.add([doc]);
+  });
+  return f;
+}
 
 // Make sure func only runs if inner hasn't been called
 // since delay seconds ago. If every is defined, run it
@@ -133,18 +144,19 @@ function throttled(func, delay, every) {
   return inner;
 }
 
-
 /*
 crossfilter stuff
 */
 // Define crossfilters
-var xfs = { "sfl": crossfilter(), "range": crossfilter(), "pop": crossfilter() };
+var xfs = { "sfl": crossfilter(), "range": crossfilter(), "pop": crossfilter(),
+            "cstar": crossfilter() };
 // crossfilter dimensions
-var dims = { "date": [], "range": [], "pop": [], "datePop": [] };
+var dims = { "date": [], "range": [], "pop": [], "datePop": [],
+             "dateCstar": [] };
 // crossfilter groups
 var groups = {
   "speed": [], "temp": [], "salinity": [], "range": [],
-  "abundance": [], "fsc_small": []
+  "abundance": [], "fsc_small": [], "attenuation": []
 };
 
 // dc.js charts
@@ -152,16 +164,9 @@ var charts = {};
 dc.disableTransitions = true;
 
 /*
-// Browser console debugging
-window._groups = groups;
-window._dims = dims;
-window._xfs = xfs;
-window._charts = charts;
-*/
-
-/*
 Map stuff
 */
+var tileURL = 'http://127.0.0.1:3002/{z}/{x}/{y}.png';
 var cruiseLocs = [];
 var cruiseMap = null;
 var cruiseLayer = null;
@@ -178,7 +183,7 @@ var yDomains = {
   temp: null,
   salinity: null,
   par: null,
-  attenuation: [0, 0.3],
+  attenuation: [0.06, 0.15],
   abundance: null,
   fsc_small: null
 };
@@ -350,12 +355,6 @@ function addEmptyPop(group, binSize) {
   };
 }
 
-/*
-// Browser console debugging
-window._addEmpty = addEmpty;
-window._addEmptyPop = addEmptyPop;
-*/
-
 function initializeSflData() {
   var msIn3Min = 3 * 60 * 1000;
   dims.date[1] = xfs.sfl.dimension(function(d) { return d.date; });
@@ -410,6 +409,24 @@ function initializePopData() {
   dims.pop = xfs.pop.dimension(function(d) { return d.pop; });
 }
 
+function initializeCstarData() {
+  var msIn3Min = 3 * 60 * 1000;
+  var first = dims.date[1].bottom(1)[0].date;
+
+  dims.dateCstar[1] = xfs.cstar.dimension(function(d) { return d.date; });
+  [2,4,8,16,32].forEach(function(binSize) {
+    dims.dateCstar[binSize] = xfs.cstar.dimension(function(d) {
+      return roundDate(d.date, first, binSize*msIn3Min);
+    });
+  });
+
+  var key = "attenuation";
+  [1,2,4,8,16,32].forEach(function(binSize) {
+    groups[key][binSize] = dims.dateCstar[binSize].group().reduce(
+      reduceAdd(key), reduceRemove(key), reduceInitial);
+  });
+}
+
 function initializeDateRange() {
   // Select the last day by default. If there is less than a day of data
   // select all data.
@@ -438,6 +455,10 @@ function initializeSflPlots() {
 function initializePopPlots() {
   plotPopSeriesChart("abundance", "Abundance (10^6 cells/L)", legend = true);
   plotPopSeriesChart("fsc_small", "Forward scatter (a.u.)", legend = true);
+}
+
+function initializeCstarPlots() {
+  plotLineChart("attenuation", "Attenuation (m-1)");
 }
 
 function plotRangeChart(yAxisLabel) {
@@ -630,7 +651,7 @@ function updateCharts() {
   var binSize = getBinSize(dateRange);
   console.log("points per bin = " + binSize);
 
-  ["speed", "temp", "salinity"].forEach(function(key) {
+  ["speed", "temp", "salinity", "attenuation"].forEach(function(key) {
     if (charts[key]) {
       charts[key].dimension(dims.date[binSize]);
       charts[key].group(addEmpty(groups[key][binSize], binSize));
@@ -644,16 +665,6 @@ function updateCharts() {
     if (charts[key]) {
       charts[key].dimension(dims.datePop[binSize]);
       charts[key].group(addEmptyPop(groups[key][binSize], binSize));
-      charts[key].expireCache();
-      charts[key].x().domain(dateRange);
-      redrawChart(key);
-    }
-  });
-
-  ["attenuation"].forEach(function(key) {
-    if (charts[key]) {
-      charts[key].dimension(dims.date[binSize]);
-      charts[key].group(addEmpty(groups[key][binSize], binSize));
       charts[key].expireCache();
       charts[key].x().domain(dateRange);
       redrawChart(key);
@@ -884,6 +895,36 @@ function geo2knots(lonlat1, lonlat2, t1, t2) {
   return km / hours / kmPerKnot;
 }
 
+// Calculate average speed between this current SFL doc  and previous
+//
+// Args:
+//     prev: previous SFL document
+//     cur: current SFL document
+//
+// A new attribute "speed" will be added to cur. If there is not previous
+// doc it will be null.
+function addSpeed(prev, cur) {
+  if (prev) {
+    cur.speed = geo2knots([prev.lat, prev.lon], [cur.lat, cur.lon],
+                          prev.date, cur.date);
+  } else {
+    cur.speed = null;
+  }
+}
+
+function setupMap() {
+  var attribution = 'Map data &copy; ';
+  attribution += '<a href="http://openstreetmap.org">OpenStreetMap</a> contributors, ';
+  attribution += '<a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>';
+  cruiseMap = L.map('cruise-map').setView([47, -122], 4);
+  L.Icon.Default.imagePath = '/leaflet/images';
+  var tileLayer = L.tileLayer(tileURL, {
+    attribution: attribution,
+    maxZoom: 8
+  });
+  tileLayer.addTo(cruiseMap);
+}
+
 var updateMap = (function() {
   var alreadyRun = false;
 
@@ -940,3 +981,13 @@ var updateMap = (function() {
     }
   };
 })();
+
+/*
+// Browser console debugging
+window._groups = groups;
+window._dims = dims;
+window._xfs = xfs;
+window._charts = charts;
+window._addEmpty = addEmpty;
+window._addEmptyPop = addEmptyPop;
+*/
