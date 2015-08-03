@@ -1,19 +1,19 @@
 
 var util = require('util');
 var Transform = require('stream').Transform;
-util.inherits(sflStream, Transform);
+util.inherits(cstarStream, Transform);
 
-exports.sflStream = sflStream;
+exports.cstarStream = cstarStream;
 
 /*
 ******************************************************************************
-sflStream definition
+cstarStream definition
 ******************************************************************************
-Split a stream of single lines of an sfl.csv file into objects.
+Split a stream of single lines of an cstar.csv file into objects.
 */
-function sflStream() {
-  if (!(this instanceof sflStream)) {
-    return new sflStream();
+function cstarStream() {
+  if (!(this instanceof cstarStream)) {
+    return new cstarStream();
   }
 
   options = {
@@ -26,8 +26,8 @@ function sflStream() {
   this._keys = {};
 }
 
-// Create a doc from one line of a sfl.csv file.
-sflStream.prototype._line2doc = function(line) {
+// Create a doc from one line of a cstar.csv file.
+cstarStream.prototype._line2doc = function(line) {
   var self = this;
 
   var fields = line.split(',');
@@ -40,22 +40,14 @@ sflStream.prototype._line2doc = function(line) {
   }
 
   var doc = {
-    date: new Date(fields[self._keys.date]),
-    file: fields[self._keys.file],
-    lon: toNumberOrNull(fields[self._keys.lon]),
-    lat: toNumberOrNull(fields[self._keys.lat]),
-    //conductivity: +fields[self._keys.conductivity],
-    salinity: toNumberOrNull(fields[self._keys.salinity]),
-    temp: toNumberOrNull(fields[self._keys.ocean_tmp]),
-    //bulk_red: +fields[self._keys.bulk_red],
-    par: toNumberOrNull(fields[self._keys.par]),
-    cruise: fields[self._keys.cruise]
+    date: new Date(fields[self._keys.time]),
+    attenuation: toNumberOrNull(fields[self._keys.attenuation])
   };
 
   return doc;
 };
 
-sflStream.prototype._transform = function(data, encoding, done) {
+cstarStream.prototype._transform = function(data, encoding, done) {
   var self = this;
 
   data = data.toString('utf8');

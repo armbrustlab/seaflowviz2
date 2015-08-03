@@ -41,8 +41,8 @@ statStream.prototype._line2doc = function(line) {
 
   // Check that this line has correct field count
   if (fields.length !== Object.keys(self._keys).length) {
-    self.emit('error', new Error('field count != header column count, line='
-      + self._linecount + ', cruise=' + self.cruise));
+    self.emit('error', new Error('field count != header column count, line=' +
+      self._linecount + ', cruise=' + self.cruise));
     return;
   }
 
@@ -50,23 +50,21 @@ statStream.prototype._line2doc = function(line) {
     cruise: fields[self._keys.cruise],
     //file: fields[self._keys.file],
     date: new Date(fields[self._keys.time]),
-    //flow_rate: +fields[self._keys.flow_rate],
-    //file_duration: +fields[self._keys.file_duration],
+    //flow_rate: toNumberOrNull(fields[self._keys.flow_rate]),
+    //file_duration: toNumberOrNull(fields[self._keys.file_duration]),
     pop: fields[self._keys.pop],
     popData: {
-      //opp_evt_ratio: +fields[self._keys.opp_evt_ratio],
-      //n_count: +fields[self._keys.n_count],
-      abundance: +fields[self._keys.abundance],
-      fsc_small: +fields[self._keys.fsc_small],
-      //chl_small: +fields[self._keys.chl_small],
-      //pe: +fields[self._keys.pe]
+      //opp_evt_ratio: toNumberOrNull(fields[self._keys.opp_evt_ratio]),
+      //n_count: toNumberOrNull(fields[self._keys.n_count]),
+      abundance: toNumberOrNull(fields[self._keys.abundance]),
+      fsc_small: toNumberOrNull(fields[self._keys.fsc_small]),
+      //chl_small: toNumberOrNull(fields[self._keys.chl_small]),
+      //pe: toNumberOrNull(fields[self._keys.pe])
     }
   };
 
-  if (this._allowedPops[doc.pop] &&
-    // Don't produce a record if all values aren't valid
-      ! isNaN(doc.popData.abundance) &&
-      ! isNaN(doc.popData.fsc_small)) {
+  // Only produce a record if this pop is whitelisted
+  if (this._allowedPops[doc.pop]) {
     return doc;
   }
   return null;
@@ -121,4 +119,12 @@ statStream.prototype._flush = function(done) {
     self.push(self._cur);
   }
   done();
+};
+
+function toNumberOrNull(str) {
+  var num = +str;
+  if (isNaN(num)) {
+    return null;
+  }
+  return num;
 }
