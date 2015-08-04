@@ -54,7 +54,6 @@ Template.charts.rendered = function() {
 // Incorporate new SFL data as it arrives
 function sflAdded() {
   var madeSflPlots = false;
-  var prevSfl;
   var f = throttled(function(doc) {
     if (! madeSflPlots) {
       initializeSflData();
@@ -70,13 +69,19 @@ function sflAdded() {
     updateCharts();
     updateMap();
     Session.set("recent", doc.date.toISOString());
-  }, 1000, function(doc) {
+  }, 1000, addSflRecord());
+  return f;
+}
+
+function addSflRecord() {
+  var prevSfl;
+  var f = function(doc) {
     addSpeed(prevSfl, doc);
     prevSfl = doc;
     xfs.sfl.add([doc]);
     xfs.range.add([doc]);
     cruiseLocs.push({lat: doc.lat, lon: doc.lon, date: doc.date});
-  });
+  };
   return f;
 }
 
@@ -90,7 +95,12 @@ function statAdded() {
       madePopPlots = true;
     }
     updateCharts();
-  }, 1000, function(doc) {
+  }, 1000, addStatRecord());
+  return f;
+}
+
+function addStatRecord() {
+  var f = function(doc) {
     _.keys(doc.pops).forEach(function(p) {
       if (p === "unknown") {
         return;
@@ -103,7 +113,7 @@ function statAdded() {
       };
       xfs.pop.add([popDoc]);
     });
-  });
+  };
   return f;
 }
 
@@ -117,11 +127,42 @@ function cstarAdded() {
       madeCstarPlots = true;
     }
     updateCharts();
-  }, 1000, function(doc) {
-      xfs.cstar.add([doc]);
-  });
+  }, 1000, addCstarRecord());
   return f;
 }
+
+function addCstarRecord() {
+  var f = function(doc) {
+    xfs.cstar.add([doc]);
+  };
+  return f;
+}
+
+function resetPlots() {
+  // Clear current crossfilters and map points
+  cruiseLocs = [];
+  resetCrossfilters();
+
+  // Add data back to crossfilters
+  Sfl.find().forEach(addSflRecord());
+  Stat.find().forEach(addStatRecord());
+  Cstar.find().forEach(addCstarRecord());
+
+  // Reconfigure crossfilter dimensions and groups
+  initializeSflData();
+  initializePopData();
+  initializeCstarData();
+
+  // Reapply pop filters
+  filterPops();
+
+  // Replot
+  updateRangeChart();
+  updateCharts();
+  updateMap();
+}
+
+window.resetPlots = resetPlots;
 
 // Make sure func only runs if inner hasn't been called
 // since delay seconds ago. If every is defined, run it
@@ -148,8 +189,15 @@ function throttled(func, delay, every) {
 crossfilter stuff
 */
 // Define crossfilters
-var xfs = { "sfl": crossfilter(), "range": crossfilter(), "pop": crossfilter(),
-            "cstar": crossfilter() };
+var xfs;
+
+function resetCrossfilters() {
+  xfs = { "sfl": crossfilter(), "range": crossfilter(), "pop": crossfilter(),
+          "cstar": crossfilter() };
+}
+
+resetCrossfilters();
+
 // crossfilter dimensions
 var dims = { "date": [], "range": [], "pop": [], "datePop": [],
              "dateCstar": [] };
@@ -157,6 +205,11 @@ var dims = { "date": [], "range": [], "pop": [], "datePop": [],
 var groups = {
   "speed": [], "temp": [], "salinity": [], "range": [],
   "abundance": [], "fsc_small": [], "attenuation": []
+};
+
+var erased = {
+  "speed": {}, "temp": {}, "salinity": {}, "range": {},
+  "abundance": {}, "fsc_small": {}, "attenuation": {},
 };
 
 // dc.js charts
@@ -183,7 +236,7 @@ var yDomains = {
   temp: null,
   salinity: null,
   par: null,
-  attenuation: [0.06, 0.15],
+  attenuation: null,
   abundance: null,
   fsc_small: null
 };
@@ -213,13 +266,10 @@ function getBinSize(dateRange) {
   var msInRange = dateRange[1].getTime() - dateRange[0].getTime();
   var points = ceiling(msInRange / msIn3Min);
 
-  // Figure out how large to make each bin (in 480 3 minute point increments)
-  // in order to keep points
+  // Figure out how large to make each bin in order to keep points
   // below maxPoints. e.g. if there are 961 3 minute points in range,
-  // then the new bin size would be 3 * 3 minutes = 9 minutes. If there
-  // were 960 the new bin size would be 2 * 3 minutes = 6 minutes.
-  //return Math.min(ceiling(points / maxPoints), 8);
-  //return 1;
+  // then the new bin size would be 5 * 3 minutes = 15 minutes. If there
+  // were 960 the new bin size would be 4 * 3 minutes = 12 minutes.
   var exponent = ceiling(log(points/maxPoints, 2));
   exponent = Math.max(Math.min(exponent, 6), 0);
   return Math.pow(2, exponent);
@@ -238,6 +288,7 @@ function log(n, base) {
   return Math.log(n) / Math.log(base);
 }
 
+// Value accessor common to all dc.js plots
 function valueAccessor(d) {
   if (d.value.total === null || d.value.count === 0) {
     // D3 plots are setup so that if a y value is null the line segement
@@ -248,23 +299,47 @@ function valueAccessor(d) {
   }
 }
 
+// Create a population plot dimension key formatted as
+// date.toISOString()_population, e.g. "2015-08-03T09:37:45.000Z_picoeuk"
+function makePopKey(date, pop) {
+  return date.toISOString() + "_" + pop;
+}
+
+function keyAccessorPop(d) {
+  return new Date(d.key.substr(0, 24));
+}
+
+function seriesAccessorPop(d) {
+  return d.key.substr(25);
+}
+
 /*
 Crossfilter functions
 */
 
-// Reduce functions to stop crossfilter from coercing null values to 0
-// Allows chart.defined() to work as expected and create disconintinous
-// line charts, while also differentiating between true 0 values and
-// missing data.
+// Reduce functions to stop crossfilter from coercing null totals to 0.
+// This will happen if a null value is added to or subtracted from a null
+// total. D3 would then erroneously plot this point as 0, when it should not
+// be plotted at all. Keeping null totals as null allows chart.defined() to
+// work as expected and create discontinous line charts, differentiating
+// between true 0 values and missing data.
 function reduceAdd(key) {
   return function(p, v) {
-    //console.log("adding: ", v.pop, v.time, v[key], p.count, p.total);
-    if (v[key] !== null) {
-      ++p.count;
+    // Don't add this value if it's marked for erasure
+    if (erased[key]) {
+        if (erased[key][v.date.toISOString()] ||
+            (v.pop && erased[key][makePopKey(v.date, v.pop)])) {
+            return p;
+        }
     }
-    // want to avoid coercing a null p.total to 0 by adding a null
-    // v[key]
-    if (p.total !== null || v[key] !== null) {
+
+    // Record this member of the group, even if it is null and does not count
+    // towards the total or count for the group. Helpful during debugging.
+    p.members.push(v);
+
+    // If there is data to add
+    if (v[key] !== null && ! isNaN(v[key]) && v[key] !== undefined) {
+      ++p.count;
       p.total += v[key];
     }
     return p;
@@ -273,12 +348,20 @@ function reduceAdd(key) {
 
 function reduceRemove(key) {
   return function(p, v) {
-    if (v[key] !== null) {
-      --p.count;
+    var idx = null;
+    for (var i=0; i<p.members.length; i++) {
+      if (p.members[i] === v) {
+        idx = i;
+        break;
+      }
     }
-    // want to avoid coercing a null p.total to 0 by subtracting
-    // a null v[key]
-    if (p.total !== null || v[key] !== null) {
+    if (idx !== null) {
+      p.members.splice(idx, 1);  // erase this member
+    }
+
+    // If there is data to remove
+    if (v[key] !== null && ! isNaN(v[key]) && v[key] !== undefined) {
+      --p.count;
       p.total -= v[key];
     }
     return p;
@@ -286,7 +369,7 @@ function reduceRemove(key) {
 }
 
 function reduceInitial() {
-  return { count: 0, total: null };
+  return { count: 0, total: null, members: [] };
 }
 
 // Make sure there are empty groups to interrupt line connections
@@ -322,19 +405,13 @@ function addEmpty(group, binSize) {
 // when data is missing
 function addEmptyPop(group, binSize) {
   var msIn1Min = 60 * 1000;
-  var keyAccessor = function(d) {
-    return new Date(+(d.key.substr(0, 13)));
-  };
-  var seriesAccessor = function(d) {
-    return d.key.substr(14);
-  };
   return {
     all: function() {
       var prev = {};
       var groups = [];
       group.all().forEach(function(g) {
-        var pop = seriesAccessor(g);
-        var date = keyAccessor(g);
+        var pop = seriesAccessorPop(g);
+        var date = keyAccessorPop(g);
         // If the gap between data is more than <bucket size> + 1 minute,
         // insert a null data point to break line segment.
         if (prev[pop] && (date - prev[pop]) > binSize * 3 * msIn1Min + msIn1Min) {
@@ -343,7 +420,7 @@ function addEmptyPop(group, binSize) {
                       + " between " + prev[pop].toISOString() + " and " +
                       date.toISOString());*/
           groups.push({
-            key: String(newdate.getTime()) + "_" + pop,
+            key: makePopKey(newdate, pop),
             value: {count: 0, total: null}
           });
         }
@@ -389,13 +466,15 @@ function initializeSflData() {
 function initializePopData() {
   var msIn3Min = 3 * 60 * 1000;
 
-  dims.datePop[1] = xfs.pop.dimension(function(d) { return String(d.date.getTime()) + "_" + d.pop; });
+  dims.datePop[1] = xfs.pop.dimension(function(d) {
+    return makePopKey(d.date, d.pop);
+  });
 
   // dims.date must have data from SFL by now!
   var first = dims.date[1].bottom(1)[0].date;
   [2,4,8,16,32].forEach(function(binSize) {
     dims.datePop[binSize] = xfs.pop.dimension(function(d) {
-      return String(roundDate(d.date, first, binSize*msIn3Min).getTime()) + "_" + d.pop;
+      return makePopKey(roundDate(d.date, first, binSize*msIn3Min), d.pop);
     });
   });
 
@@ -547,6 +626,14 @@ function plotLineChart(key, yAxisLabel) {
   chart.xAxis().ticks(6);
   chart.yAxis().ticks(4);
   chart.yAxis().tickFormat(d3.format(".2f"));
+  chart.on("renderlet", function(chart) {
+    chart.selectAll("circle").on("click", function(d, i) {
+      d.data.value.members.forEach(function(m) {
+        erased[key][m.date.toISOString()] = true;
+      });
+      resetPlots();
+    });
+  });
   chart.render();
 }
 
@@ -560,24 +647,13 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
   var group = addEmptyPop(groups[key][binSize], binSize);
   var yAxisDomain = yDomains[key] ? yDomains[key] : d3.extent(group.all(), valueAccessor);
 
-  // As small performance improvement, hardcode substring positions since
-  // we know the key is always something like "1426522573342_key" and the
-  // length of the milliseconds string from Date.getTime() won't change until
-  // 2286
-  var keyAccessor = function(d) {
-    return new Date(+(d.key.substr(0, 13)));
-  };
-  var seriesAccessor = function(d) {
-    return popLookup[d.key.substr(14)];
-  };
-
   // Create label for each point from key
-  // e.g. "1437259296000_beads" becomes a date and "beads"
+  // e.g. "2015-08-04T22:22:42.660Z_beads" becomes a date and "beads"
   var titleFunc = function(d) {
-    return labelFormat(keyAccessor(d)) + "\n" + d3.format(".2f")(valueAccessor(d));
+    var t = labelFormat(keyAccessorPop(d)) + "\n";
+    t += d3.format(".2f")(valueAccessor(d));
+    return t;
   };
-  // Bind to window for easy browswer console debugging
-  //window._titleFunc = titleFunc;
 
   var minMaxY = d3.extent(group.all(), valueAccessor);
   var legendHeight = 15;  // size of legend
@@ -591,8 +667,11 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
     .ordinalColors(["#FFBB78", "#FF7F0E", "#1F77B4", "#AEC7E8"])
     .dimension(dim)
     .group(group)
-    .seriesAccessor(seriesAccessor)
-    .keyAccessor(keyAccessor)
+    .seriesAccessor(function(d) {
+      // Return full population name rather than short name
+      return popLookup[seriesAccessorPop(d)];
+    })
+    .keyAccessor(keyAccessorPop)
     .valueAccessor(valueAccessor)
     .brushOn(false)
     .clipPadding(10)
@@ -642,6 +721,15 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
     // adjust chart size so that plot area is same size as chart with legend
     chart.height(chart.height() - legendHeight + 5);
   }
+  chart.on("renderlet", function(chart) {
+    chart.selectAll("circle").on("click", function(d, i) {
+      d.data.value.members.forEach(function(m) {
+        erased[key][makePopKey(m.date, m.pop)] = true;
+      });
+      resetPlots();
+      console.log(d);
+    });
+  });
   chart.render();
 }
 
@@ -755,11 +843,7 @@ function recalculateY(chart, yDomain) {
     var timeKey;
     if (chart.children !== undefined) {
       // Population series plot
-      // key for dimension is [time, pop]
-      timeKey = function(element) {
-        var parts = element.key.split("_");
-        return new Date(+parts[0]);
-      };
+      timeKey = function(element) { return keyAccessorPop(element); };
     } else {
       // Single line chart
       // key for dimension is time
@@ -811,12 +895,7 @@ function configureLegend(chart) {
       popFlags[popName] = ! popFlags[popName];
 
       dressButtons();  // do this first to hide plotting delay
-      filterPops();
-
-      // Update plot
-      ["abundance", "fsc_small"].forEach(function(key) {
-        redrawChart(key);
-      });
+      resetPlots();
     };
   });
 }
@@ -990,4 +1069,5 @@ window._xfs = xfs;
 window._charts = charts;
 window._addEmpty = addEmpty;
 window._addEmptyPop = addEmptyPop;
+window._erased = erased;
 */
