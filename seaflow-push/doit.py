@@ -24,6 +24,10 @@ def main():
     cstar3_file = "cstar3min.csv"
     cstar3_table = "cstar3min.csv"
 
+    # Find the full cstar.csv file
+    cstar_file = "cstar.csv"
+    cstar_table = "cstar.csv"
+
     sql = sqlshare.SQLShare()
 
     print("updating STATS...")
@@ -34,6 +38,9 @@ def main():
 
     print("updating CSTAR 3 min...")
     sql.uploadone(cstar3_file, cstar3_table)
+
+    print("updating CSTAR ...")
+    sql.uploadone(cstar_file, cstar_table)
 
 if __name__ == "__main__":
     main()
