@@ -1,3 +1,77 @@
+// ****************************************************************************
+// Useful variables
+// ****************************************************************************
+/*
+crossfilter stuff
+*/
+// Define crossfilters
+var xfs = { "sfl": crossfilter(), "range": crossfilter(), "pop": crossfilter(),
+            "cstar": crossfilter() };
+
+// crossfilter dimensions
+var dims = { "date": [], "range": [], "pop": [], "datePop": [],
+             "dateCstar": [] };
+// crossfilter groups
+var groups = {
+  "speed": [], "temp": [], "salinity": [], "range": [],
+  "abundance": [], "fsc_small": [], "attenuation": []
+};
+
+var erased = {
+  "speed": {}, "temp": {}, "salinity": {}, "range": {},
+  "abundance": {}, "fsc_small": {}, "attenuation": {},
+};
+
+// dc.js charts
+var charts = {};
+dc.disableTransitions = true;
+
+/*
+Map stuff
+*/
+var tileURL = 'http://127.0.0.1:3002/{z}/{x}/{y}.png';
+var cruiseLocs = [];
+var cruiseMap = null;
+var cruiseLayer = null;
+
+/*
+variables for chart formatting
+*/
+// format for chart point label time
+var labelFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S GMT");
+// default y domain limits
+var yDomains = {
+  range: [0, 0.3],
+  speed: [0, 15],
+  temp: null,
+  salinity: null,
+  par: null,
+  attenuation: null,
+  abundance: null,
+  fsc_small: null
+};
+// should time selection be pinned to most recent data?
+var pinnedToMostRecent = false;
+// Short names for populations in database
+var popNames = ["prochloro", "synecho", "picoeuk", "beads"];
+// Full names for legend
+var popLabels = ["Prochlorococcus", "Synechococcus", "Picoeukaryotes", "Beads"];
+// Lookup table between pop database shortnames / object keys and common names
+var popLookup = {};
+for (var i = 0; i < popNames.length; i++) {
+  popLookup[popNames[i]] = popLabels[i];
+  popLookup[popLabels[i]] = popNames[i];
+}
+// Track which populations should be shown in plots
+var popFlags = {};
+popNames.forEach(function(p) { popFlags[p] = true; });
+// Date range to plot for all charts except range chart
+var dateRange = null;
+
+
+// ****************************************************************************
+// Meteor
+// ****************************************************************************
 Stat = new Mongo.Collection("stat");
 Sfl = new Mongo.Collection("sfl");
 Cstar = new Mongo.Collection("cstar");
@@ -138,32 +212,6 @@ function addCstarRecord() {
   return f;
 }
 
-function resetPlots() {
-  // Clear current crossfilters and map points
-  cruiseLocs = [];
-  resetCrossfilters();
-
-  // Add data back to crossfilters
-  Sfl.find().forEach(addSflRecord());
-  Stat.find().forEach(addStatRecord());
-  Cstar.find().forEach(addCstarRecord());
-
-  // Reconfigure crossfilter dimensions and groups
-  initializeSflData();
-  initializePopData();
-  initializeCstarData();
-
-  // Reapply pop filters
-  filterPops();
-
-  // Replot
-  updateRangeChart();
-  updateCharts();
-  updateMap();
-}
-
-window.resetPlots = resetPlots;
-
 // Make sure func only runs if inner hasn't been called
 // since delay seconds ago. If every is defined, run it
 // every time inner is called
@@ -185,78 +233,46 @@ function throttled(func, delay, every) {
   return inner;
 }
 
-/*
-crossfilter stuff
-*/
-// Define crossfilters
-var xfs;
 
-function resetCrossfilters() {
-  xfs = { "sfl": crossfilter(), "range": crossfilter(), "pop": crossfilter(),
-          "cstar": crossfilter() };
+// ****************************************************************************
+// Data plots
+// ****************************************************************************
+function resetLinePlots() {
+  // Clear current crossfilters and map points
+  cruiseLocs = [];
+  xfs.sfl = crossfilter();
+  xfs.cstar = crossfilter();
+  xfs.range = crossfilter();
+
+  // Add data back to crossfilters
+  Sfl.find().forEach(addSflRecord());
+  Cstar.find().forEach(addCstarRecord());
+
+  // Reconfigure crossfilter dimensions and groups
+  initializeSflData();
+  initializeCstarData();
+
+  // Replot
+  updateLineCharts();
+  updateMap();
 }
 
-resetCrossfilters();
+function resetPopPlots() {
+  // Clear current crossfilter
+  xfs.pop = crossfilter();
 
-// crossfilter dimensions
-var dims = { "date": [], "range": [], "pop": [], "datePop": [],
-             "dateCstar": [] };
-// crossfilter groups
-var groups = {
-  "speed": [], "temp": [], "salinity": [], "range": [],
-  "abundance": [], "fsc_small": [], "attenuation": []
-};
+  // Add data back to crossfilters
+  Stat.find().forEach(addStatRecord());
 
-var erased = {
-  "speed": {}, "temp": {}, "salinity": {}, "range": {},
-  "abundance": {}, "fsc_small": {}, "attenuation": {},
-};
+  // Reconfigure crossfilter dimensions and groups
+  initializePopData();
 
-// dc.js charts
-var charts = {};
-dc.disableTransitions = true;
+  // Reapply pop filters
+  filterPops();
 
-/*
-Map stuff
-*/
-var tileURL = 'http://127.0.0.1:3002/{z}/{x}/{y}.png';
-var cruiseLocs = [];
-var cruiseMap = null;
-var cruiseLayer = null;
-
-/*
-variables for chart formatting
-*/
-// format for chart point label time
-var labelFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S GMT");
-// default y domain limits
-var yDomains = {
-  range: [0, 0.3],
-  speed: [0, 15],
-  temp: null,
-  salinity: null,
-  par: null,
-  attenuation: null,
-  abundance: null,
-  fsc_small: null
-};
-// should time selection be pinned to most recent data?
-var pinnedToMostRecent = false;
-// Short names for populations in database
-var popNames = ["prochloro", "synecho", "picoeuk", "beads"];
-// Full names for legend
-var popLabels = ["Prochlorococcus", "Synechococcus", "Picoeukaryotes", "Beads"];
-// Lookup table between pop database shortnames / object keys and common names
-var popLookup = {};
-for (var i = 0; i < popNames.length; i++) {
-  popLookup[popNames[i]] = popLabels[i];
-  popLookup[popLabels[i]] = popNames[i];
+  // Replot
+  updatePopCharts();
 }
-// Track which populations should be shown in plots
-var popFlags = {};
-popNames.forEach(function(p) { popFlags[p] = true; });
-// Date range to plot for all charts except range chart
-var dateRange = null;
 
 function getBinSize(dateRange) {
   var maxPoints = 240;
@@ -631,7 +647,7 @@ function plotLineChart(key, yAxisLabel) {
       d.data.value.members.forEach(function(m) {
         erased[key][m.date.toISOString()] = true;
       });
-      resetPlots();
+      resetLinePlots();
     });
   });
   chart.render();
@@ -726,8 +742,7 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
       d.data.value.members.forEach(function(m) {
         erased[key][makePopKey(m.date, m.pop)] = true;
       });
-      resetPlots();
-      console.log(d);
+      resetPopPlots();
     });
   });
   chart.render();
@@ -735,10 +750,19 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
 
 function updateCharts() {
   var t0 = new Date();
-
   var binSize = getBinSize(dateRange);
   console.log("points per bin = " + binSize);
 
+  updateLineCharts();
+  updatePopCharts();
+
+  var t1 = new Date();
+  console.log("chart updates took " + (t1.getTime() - t0.getTime()) / 1000);
+  console.log("dateRange is " + dateRange.map(labelFormat).join(" - "));
+}
+
+function updateLineCharts() {
+  var binSize = getBinSize(dateRange);
   ["speed", "temp", "salinity", "attenuation"].forEach(function(key) {
     if (charts[key]) {
       charts[key].dimension(dims.date[binSize]);
@@ -748,7 +772,10 @@ function updateCharts() {
       redrawChart(key);
     }
   });
+}
 
+function updatePopCharts() {
+  var binSize = getBinSize(dateRange);
   ["abundance", "fsc_small"].forEach(function(key) {
     if (charts[key]) {
       charts[key].dimension(dims.datePop[binSize]);
@@ -758,10 +785,6 @@ function updateCharts() {
       redrawChart(key);
     }
   });
-
-  var t1 = new Date();
-  console.log("chart updates took " + (t1.getTime() - t0.getTime()) / 1000);
-  console.log("dateRange is " + dateRange.map(labelFormat).join(" - "));
 }
 
 function redrawChart(key) {
@@ -895,7 +918,7 @@ function configureLegend(chart) {
       popFlags[popName] = ! popFlags[popName];
 
       dressButtons();  // do this first to hide plotting delay
-      resetPlots();
+      resetPopPlots();
     };
   });
 }
@@ -991,6 +1014,10 @@ function addSpeed(prev, cur) {
   }
 }
 
+
+// ****************************************************************************
+// Maps
+// ****************************************************************************
 function setupMap() {
   var attribution = 'Map data &copy; ';
   attribution += '<a href="http://openstreetmap.org">OpenStreetMap</a> contributors, ';
@@ -1062,7 +1089,9 @@ var updateMap = (function() {
 })();
 
 /*
+// ****************************************************************************
 // Browser console debugging
+// ****************************************************************************
 window._groups = groups;
 window._dims = dims;
 window._xfs = xfs;
