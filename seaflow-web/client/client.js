@@ -9,7 +9,7 @@ var xfs = { "sfl": crossfilter(), "range": crossfilter(), "pop": crossfilter(),
             "cstar": crossfilter() };
 
 // crossfilter dimensions
-var dims = { "date": [], "range": [], "pop": [], "datePop": [],
+var dims = { "date": [], "range": [], "pop": null, "datePop": [],
              "dateCstar": [] };
 // crossfilter groups
 var groups = {
@@ -25,14 +25,6 @@ var erased = {
 // dc.js charts
 var charts = {};
 dc.disableTransitions = true;
-
-/*
-Map stuff
-*/
-var tileURL = 'http://127.0.0.1:3002/{z}/{x}/{y}.png';
-var cruiseLocs = [];
-var cruiseMap = null;
-var cruiseLayer = null;
 
 /*
 variables for chart formatting
@@ -67,6 +59,88 @@ var popFlags = {};
 popNames.forEach(function(p) { popFlags[p] = true; });
 // Date range to plot for all charts except range chart
 var dateRange = null;
+
+
+// ****************************************************************************
+// Maps
+// ****************************************************************************
+// Holds returned function from makeMapUpater
+var updateMap;
+
+// Objects with lat, lon, date, and map library specific coordinate object
+var mapLocs = [];
+
+// Initialize the map and return a function that will update ship positions.
+// This function should be called after the DOM is loaded. The returned
+// function should be called everytime new coordinates ready for plotting.
+function makeMapUpdater() {
+  var alreadyRun = false;
+  var cruiseLayer;
+  var tileURL = 'http://127.0.0.1:3002/{z}/{x}/{y}.png';
+  var attribution = 'Map data &copy; ';
+  attribution += '<a href="http://openstreetmap.org">OpenStreetMap</a> contributors, ';
+  attribution += '<a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>';
+  var cruiseMap = L.map('cruise-map').setView([47, -122], 4);
+  L.Icon.Default.imagePath = '/leaflet/images';
+  var tileLayer = L.tileLayer(tileURL, {
+    attribution: attribution,
+    maxZoom: 8
+  });
+  tileLayer.addTo(cruiseMap);
+
+  return function() {
+    if (mapLocs.length === 0) {
+      return;
+    }
+    var allLatLngs = [];
+    var selectedLatLngs = [];
+    mapLocs.forEach(function(doc) {
+      if (! doc.latLng) {
+        doc.latLng = new L.latLng(doc.lat, doc.lon);
+      }
+      allLatLngs.push(doc.latLng);
+      if (dateRange && (doc.date >= dateRange[0] && doc.date <= dateRange[1])) {
+        selectedLatLngs.push(doc.latLng);
+      }
+    });
+    var latestLatLng = allLatLngs[allLatLngs.length-1];
+    var latestCircle = new L.CircleMarker(latestLatLng, {
+      color: "gray",
+      radius: 6,
+      weight: 2,
+      opacity: 0.75
+    });
+    var allCruiseLine = new L.polyline(allLatLngs, {
+      color: "gray",
+      weight: 3,
+      opacity: 0.5,
+      smoothFactor: 1
+    });
+    var fg;
+    if (dateRange) {
+      var selectedCruiseLine = new L.polyline(selectedLatLngs, {
+        color: "red",
+        weight: 4,
+        opacity: 0.5,
+        smoothFactor: 1
+      });
+      fg = L.featureGroup([allCruiseLine, selectedCruiseLine, latestCircle]);
+    } else {
+      fg = L.featureGroup([allCruiseLine, latestCircle]);
+    }
+
+    if (cruiseLayer) {
+      cruiseMap.removeLayer(cruiseLayer);
+    }
+    cruiseMap.addLayer(fg);
+    cruiseLayer = fg;
+    if (! alreadyRun) {
+      // Only zoom to fit once
+      cruiseMap.fitBounds(fg.getBounds());
+      alreadyRun = true;
+    }
+  };
+}
 
 
 // ****************************************************************************
@@ -122,7 +196,7 @@ Template.charts.rendered = function() {
     added: cstarAdded()
   });
 
-  setupMap();  // Draw initial map
+  updateMap = makeMapUpdater();
 };
 
 // Incorporate new SFL data as it arrives
@@ -154,7 +228,7 @@ function addSflRecord() {
     prevSfl = doc;
     xfs.sfl.add([doc]);
     xfs.range.add([doc]);
-    cruiseLocs.push({lat: doc.lat, lon: doc.lon, date: doc.date});
+    mapLocs.push({ lat: doc.lat, lon: doc.lon, date: doc.date });
   };
   return f;
 }
@@ -175,18 +249,29 @@ function statAdded() {
 
 function addStatRecord() {
   var f = function(doc) {
-    _.keys(doc.pops).forEach(function(p) {
-      if (p === "unknown") {
-        return;
-      }
-      var popDoc = {
-        date: doc.date,
-        abundance: doc.pops[p].abundance,
-        fsc_small: Math.log10(doc.pops[p].fsc_small),
-        pop: p
-      };
-      xfs.pop.add([popDoc]);
-    });
+    if (doc.pop) {
+      // Already been separated into one doc per population
+      // This document has already been run through this
+      // function and was probably retrieved from a crossfilter
+      // dimension
+      xfs.pop.add([doc]);
+    } else {
+      // Per population data is stored in pops attribute
+      // Must be separated into separate docs per pop
+      // Came from Mongo collection
+      Object.keys(doc.pops).forEach(function(p) {
+        if (p === "unknown") {
+          return;
+        }
+        var popDoc = {
+          date: doc.date,
+          abundance: doc.pops[p].abundance,
+          fsc_small: Math.log10(doc.pops[p].fsc_small),
+          pop: p
+        };
+        xfs.pop.add([popDoc]);
+      });
+    }
   };
   return f;
 }
@@ -212,41 +297,28 @@ function addCstarRecord() {
   return f;
 }
 
-// Make sure func only runs if inner hasn't been called
-// since delay seconds ago. If every is defined, run it
-// every time inner is called
-function throttled(func, delay, every) {
-  var counter = 0;
-  var inner = function() {
-    var args = arguments;
-    if (every) {
-      every.apply(every, args);
-    }
-    var myNumber = ++counter;
-    Meteor.setTimeout(function() {
-      if (myNumber == counter) {
-        func.apply(func, args);
-        counter = 0;
-      }
-    }, delay);
-  };
-  return inner;
-}
-
 
 // ****************************************************************************
 // Data plots
 // ****************************************************************************
 function resetLinePlots() {
+  // First get all SFL and CSTAR crossfilter records with filters cleared
+  // Clear current range dim filter
+  charts.range.dimension().filterAll();
+  var sfldocs = dims.range[1].bottom(Infinity);
+  // Clear current cstar dim filter. There probably isn't one, but just in case
+  charts.attenuation.dimension().filterAll();
+  var cstardocs = dims.dateCstar[1].bottom(Infinity);
+
   // Clear current crossfilters and map points
-  cruiseLocs = [];
+  mapLocs = [];
   xfs.sfl = crossfilter();
   xfs.cstar = crossfilter();
   xfs.range = crossfilter();
 
-  // Add data back to crossfilters
-  Sfl.find().forEach(addSflRecord());
-  Cstar.find().forEach(addCstarRecord());
+  // Add data back to crossfilters and map
+  sfldocs.forEach(addSflRecord());
+  cstardocs.forEach(addCstarRecord());
 
   // Reconfigure crossfilter dimensions and groups
   initializeSflData();
@@ -254,15 +326,21 @@ function resetLinePlots() {
 
   // Replot
   updateLineCharts();
-  updateMap();
 }
 
 function resetPopPlots() {
-  // Clear current crossfilter
+  // First get all Stat crossfilter records with filters cleared
+  // Clear current fsc_small, abundance, pop dim filters
+  charts.fsc_small.dimension().filterAll();
+  charts.abundance.dimension().filterAll();
+  dims.pop.filterAll();
+  var statdocs = dims.datePop[1].bottom(Infinity);
+
+  // Clear pop Crossfilter
   xfs.pop = crossfilter();
 
   // Add data back to crossfilters
-  Stat.find().forEach(addStatRecord());
+  statdocs.forEach(addStatRecord());
 
   // Reconfigure crossfilter dimensions and groups
   initializePopData();
@@ -294,14 +372,6 @@ function getBinSize(dateRange) {
 function roundDate(date, firstDate, binSizeMilli) {
   var offset = Math.floor((date.getTime() - firstDate.getTime()) / binSizeMilli) * binSizeMilli;
   return new Date(firstDate.getTime() + offset);
-}
-
-function ceiling(input) {
-  return Math.floor(input + 0.99999999999);
-}
-
-function log(n, base) {
-  return Math.log(n) / Math.log(base);
 }
 
 // Value accessor common to all dc.js plots
@@ -1016,77 +1086,36 @@ function addSpeed(prev, cur) {
 
 
 // ****************************************************************************
-// Maps
+// Utils
 // ****************************************************************************
-function setupMap() {
-  var attribution = 'Map data &copy; ';
-  attribution += '<a href="http://openstreetmap.org">OpenStreetMap</a> contributors, ';
-  attribution += '<a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>';
-  cruiseMap = L.map('cruise-map').setView([47, -122], 4);
-  L.Icon.Default.imagePath = '/leaflet/images';
-  var tileLayer = L.tileLayer(tileURL, {
-    attribution: attribution,
-    maxZoom: 8
-  });
-  tileLayer.addTo(cruiseMap);
+// Make sure func only runs if inner hasn't been called
+// since delay seconds ago. If every is defined, run it
+// every time inner is called
+function throttled(func, delay, every) {
+  var counter = 0;
+  var inner = function() {
+    var args = arguments;
+    if (every) {
+      every.apply(every, args);
+    }
+    var myNumber = ++counter;
+    setTimeout(function() {
+      if (myNumber == counter) {
+        func.apply(func, args);
+        counter = 0;
+      }
+    }, delay);
+  };
+  return inner;
 }
 
-var updateMap = (function() {
-  var alreadyRun = false;
+function ceiling(input) {
+  return Math.floor(input + 0.99999999999);
+}
 
-  return function() {
-    if (cruiseLocs.length === 0) {
-      return;
-    }
-    var allLatLngs = [];
-    var selectedLatLngs = [];
-    cruiseLocs.forEach(function(loc) {
-      if (! loc.latLng) {
-        loc.latLng = new L.latLng(loc.lat, loc.lon);
-      }
-      allLatLngs.push(loc.latLng);
-      if (dateRange && (loc.date >= dateRange[0] && loc.date <= dateRange[1])) {
-        selectedLatLngs.push(loc.latLng);
-      }
-    });
-    var latestLatLng = cruiseLocs[cruiseLocs.length-1].latLng;
-    var latestCircle = new L.CircleMarker(latestLatLng, {
-      color: "gray",
-      radius: 6,
-      weight: 2,
-      opacity: 0.75
-    });
-    var allCruiseLine = new L.polyline(allLatLngs, {
-      color: "gray",
-      weight: 3,
-      opacity: 0.5,
-      smoothFactor: 1
-    });
-    var fg;
-    if (dateRange) {
-      var selectedCruiseLine = new L.polyline(selectedLatLngs, {
-        color: "red",
-        weight: 4,
-        opacity: 0.5,
-        smoothFactor: 1
-      });
-      fg = L.featureGroup([allCruiseLine, selectedCruiseLine, latestCircle]);
-    } else {
-      fg = L.featureGroup([allCruiseLine, latestCircle]);
-    }
-
-    if (cruiseLayer) {
-      cruiseMap.removeLayer(cruiseLayer);
-    }
-    cruiseMap.addLayer(fg);
-    cruiseLayer = fg;
-    if (! alreadyRun) {
-      // Only zoom to fit once
-      cruiseMap.fitBounds(fg.getBounds());
-      alreadyRun = true;
-    }
-  };
-})();
+function log(n, base) {
+  return Math.log(n) / Math.log(base);
+}
 
 /*
 // ****************************************************************************
